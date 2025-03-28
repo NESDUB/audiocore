@@ -4,7 +4,7 @@ import { HardDrive, Database } from 'lucide-react';
 import LibraryLocations from './LibraryLocations';
 import CacheSettings from './CacheSettings';
 import { getStorageInfo } from '../../../services/StorageService';
-import { useLibrary } from '../../../features/library/hooks/useLibrary';
+import { useLibrary } from '../../../features/library/providers/LibraryProvider';
 
 const SettingsContainer = styled.div`
   display: flex;
@@ -36,7 +36,7 @@ const InfoHeader = styled.div`
   align-items: center;
   gap: var(--spacing-sm);
   color: var(--textPrimary);
-  
+
   svg {
     color: var(--accentPrimary);
   }
@@ -99,31 +99,31 @@ const StorageSettings = () => {
   const { state } = useLibrary();
   const [storageInfo, setStorageInfo] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+
   // Calculate total size of library (in tracks)
   const totalTracks = state.tracks.length;
   const totalAlbums = state.albums.length;
   const totalArtists = state.artists.length;
-  
+
   // Calculate total storage size (rough estimate)
   const totalSizeBytes = state.totalSize || 0;
-  
+
   // Format bytes to human-readable size
   const formatSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
-    
+
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
+
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
-  
+
   // Format number with commas
   const formatNumber = (num) => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
-  
+
   // Load storage info
   useEffect(() => {
     const loadStorageInfo = async () => {
@@ -137,41 +137,41 @@ const StorageSettings = () => {
         setLoading(false);
       }
     };
-    
+
     loadStorageInfo();
   }, []);
-  
+
   return (
     <SettingsContainer>
       {/* Storage overview section */}
       <div>
         <SectionTitle>Storage Overview</SectionTitle>
-        
+
         <StorageInfo>
           <InfoHeader>
             <HardDrive size={18} />
             <h4>Library Storage</h4>
           </InfoHeader>
-          
+
           <InfoGrid>
             <InfoCard>
               <InfoLabel>TOTAL TRACKS</InfoLabel>
               <InfoValue>{formatNumber(totalTracks)}</InfoValue>
               <InfoSubValue>in your library</InfoSubValue>
             </InfoCard>
-            
+
             <InfoCard>
               <InfoLabel>TOTAL SIZE</InfoLabel>
               <InfoValue>{formatSize(totalSizeBytes)}</InfoValue>
               <InfoSubValue>estimated storage used</InfoSubValue>
             </InfoCard>
-            
+
             <InfoCard>
               <InfoLabel>STORAGE TYPE</InfoLabel>
               <InfoValue>{storageInfo?.type || 'Loading...'}</InfoValue>
               <InfoSubValue>persistent storage</InfoSubValue>
             </InfoCard>
-            
+
             {storageInfo?.percent && (
               <InfoCard>
                 <InfoLabel>STORAGE USAGE</InfoLabel>
@@ -184,14 +184,50 @@ const StorageSettings = () => {
             )}
           </InfoGrid>
         </StorageInfo>
+        
+        {/* Library Scanning Progress */}
+        {state.isScanning && (
+          <StorageInfo>
+            <InfoHeader>
+              <Database size={18} />
+              <h4>Library Scan Progress</h4>
+            </InfoHeader>
+            
+            <InfoGrid>
+              <InfoCard>
+                <InfoLabel>SCAN STATUS</InfoLabel>
+                <InfoValue>Scanning in progress</InfoValue>
+                <ProgressBar>
+                  <ProgressFill $percent={state.scanTotal > 0 ? Math.min(((state.scanProgress / state.scanTotal) * 100), 100) : 0} />
+                </ProgressBar>
+              </InfoCard>
+              
+              <InfoCard>
+                <InfoLabel>FILES PROCESSED</InfoLabel>
+                <InfoValue>{formatNumber(state.scanProgress)}</InfoValue>
+                <InfoSubValue>of {formatNumber(state.scanTotal)} files</InfoSubValue>
+              </InfoCard>
+              
+              <InfoCard>
+                <InfoLabel>COMPLETION</InfoLabel>
+                <InfoValue>
+                  {state.scanTotal > 0 ? 
+                    `${Math.round((state.scanProgress / state.scanTotal) * 100)}%` : 
+                    'Calculating...'}
+                </InfoValue>
+                <InfoSubValue>of total scan</InfoSubValue>
+              </InfoCard>
+            </InfoGrid>
+          </StorageInfo>
+        )}
       </div>
-      
+
       {/* Library locations section */}
       <div>
         <SectionTitle>Library Locations</SectionTitle>
         <LibraryLocations />
       </div>
-      
+
       {/* Cache settings section */}
       <div>
         <SectionTitle>Cache Settings</SectionTitle>

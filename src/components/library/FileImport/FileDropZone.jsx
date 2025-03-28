@@ -1,12 +1,14 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import styled from 'styled-components';
-import { UploadCloud, Music, AlertCircle, CheckCircle, Folder } from 'lucide-react';
+import { UploadCloud, Music, AlertCircle, CheckCircle, Folder, File } from 'lucide-react';
 import { useLibrary } from '../../../hooks/useLibrary';
-import { 
+import { usePlayer } from '../../../features/player/providers/PlayerProvider';
+import {
   filterAudioFilesFromFileList,
   isFileSystemAccessSupported
 } from '../../../services/FileSystemService';
 import { extractMetadata } from '../../../services/MetadataService';
+import audioService from '../../../services/AudioService';
 
 // Styled Components
 const DropZoneContainer = styled.div`
@@ -28,12 +30,12 @@ const DropZoneContainer = styled.div`
   background-color: ${props =>
     props.$isDragging
       ? props.$isDarkTheme
-        ? 'rgba(145, 242, 145, 0.05)'
-        : 'rgba(0, 160, 0, 0.05)'
+        ? 'rgba(var(--accentPrimaryRgb), 0.05)'
+        : 'rgba(var(--accentPrimaryRgb), 0.05)'
       : props.$hasError
         ? props.$isDarkTheme
-          ? 'rgba(242, 85, 90, 0.05)'
-          : 'rgba(242, 85, 90, 0.05)'
+          ? 'rgba(var(--accentErrorRgb), 0.05)'
+          : 'rgba(var(--accentErrorRgb), 0.05)'
         : 'transparent'
   };
   transition: all 0.2s ease;
@@ -69,6 +71,7 @@ const DropZoneText = styled.div`
   color: var(--textPrimary);
   font-size: 16px;
   font-weight: 500;
+  margin-bottom: var(--spacing-xs);
 `;
 
 const DropZoneSubtext = styled.div`
@@ -99,6 +102,7 @@ const SuccessOverlay = styled.div`
   transition: opacity 0.3s ease;
   opacity: ${props => props.$show ? '1' : '0'};
   pointer-events: ${props => props.$show ? 'auto' : 'none'};
+  z-index: 5;
 `;
 
 const SuccessIcon = styled.div`
@@ -126,14 +130,50 @@ const ErrorText = styled.div`
   gap: var(--spacing-xs);
 `;
 
+const FilesPreviewContainer = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  max-height: ${props => props.$show ? '120px' : '0'};
+  width: 100%;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  margin-top: ${props => props.$show ? 'var(--spacing-md)' : '0'};
+`;
+
+const FilePreview = styled.div`
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--bgSecondary);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--textSecondary);
+  max-width: 180px;
+  
+  svg {
+    flex-shrink: 0;
+  }
+`;
+
+const FileName = styled.div`
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
 /**
- * FileDropZone component - Handles drag and drop of audio files and folders
+ * FileDropZone component - Handles drag and drop of audio files
+ * Integrates with AudioService for playback
+ * 
  * @param {Object} props - Component props
  * @param {Function} props.onFilesImported - Callback when files are successfully imported
  */
 const FileDropZone = ({ onFilesImported }) => {
-  // Get library context
+  // Get contexts
   const { importTracks, addFolder } = useLibrary();
+  const { playTrack, addToQueue } = usePlayer();
 
   // Component state
   const [isDragging, setIsDragging] = useState(false);
@@ -142,13 +182,52 @@ const FileDropZone = ({ onFilesImported }) => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [importStats, setImportStats] = useState({ total: 0, success: 0 });
   const [isProcessingFolder, setIsProcessingFolder] = useState(false);
+  const [previewFiles, setPreviewFiles] = useState([]);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Refs
   const inputRef = useRef(null);
   const dropZoneRef = useRef(null);
 
-  // Determine theme from CSS variables (simplified approach)
-  const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
+  // Determine theme from CSS variables (improved approach)
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  
+  // Detect theme changes
+  useEffect(() => {
+    const detectTheme = () => {
+      // Get background color and determine if it's dark
+      const bgColor = getComputedStyle(document.documentElement)
+        .getPropertyValue('--bgPrimary')
+        .trim();
+      
+      // Simple check - if it starts with #, check value
+      if (bgColor.startsWith('#')) {
+        // Convert to RGB and check brightness
+        const hex = bgColor.substring(1);
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        
+        // Calculate perceived brightness
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        setIsDarkTheme(brightness < 128);
+      } else {
+        // Default to checking data-theme attribute
+        setIsDarkTheme(document.documentElement.getAttribute('data-theme') === 'dark');
+      }
+    };
+    
+    detectTheme();
+    
+    // Add listener for theme changes
+    const observer = new MutationObserver(detectTheme);
+    observer.observe(document.documentElement, { 
+      attributes: true,
+      attributeFilter: ['data-theme', 'class'] 
+    });
+    
+    return () => observer.disconnect();
+  }, []);
 
   // Handle drag events
   const handleDragEnter = useCallback((e) => {
@@ -163,7 +242,6 @@ const FileDropZone = ({ onFilesImported }) => {
     e.stopPropagation();
 
     // Only set dragging to false if the drag leaves the entire drop zone
-    // (dragLeave fires for child elements too)
     const rect = dropZoneRef.current.getBoundingClientRect();
     const x = e.clientX;
     const y = e.clientY;
@@ -181,7 +259,6 @@ const FileDropZone = ({ onFilesImported }) => {
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
-
     // Ensure the drop effect is 'copy' to indicate we're copying files
     e.dataTransfer.dropEffect = 'copy';
   }, []);
@@ -194,7 +271,7 @@ const FileDropZone = ({ onFilesImported }) => {
 
     const audioFiles = [];
     const reader = entry.createReader();
-    
+
     // Read all entries recursively
     const readEntries = async () => {
       return new Promise((resolve, reject) => {
@@ -204,7 +281,7 @@ const FileDropZone = ({ onFilesImported }) => {
               resolve([]);
             } else {
               const results = [];
-              
+
               for (const childEntry of entries) {
                 if (childEntry.isDirectory) {
                   // Process subdirectories recursively
@@ -217,12 +294,12 @@ const FileDropZone = ({ onFilesImported }) => {
                       // Check if it's an audio file based on extension
                       const isAudioFile = ['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac', '.opus', '.wma']
                         .some(ext => file.name.toLowerCase().endsWith(ext));
-                      
+
                       if (isAudioFile) {
                         const fullPath = childEntry.fullPath;
                         const pathParts = fullPath.split('/');
                         const directory = pathParts.slice(0, -1).join('/');
-                        
+
                         const audioFile = {
                           name: file.name,
                           path: fullPath.substring(1), // Remove leading slash
@@ -232,10 +309,10 @@ const FileDropZone = ({ onFilesImported }) => {
                           type: file.type,
                           file: file
                         };
-                        
+
                         audioFiles.push(audioFile);
                       }
-                      
+
                       resolve();
                     }, error => {
                       console.error('Error accessing file:', error);
@@ -244,7 +321,7 @@ const FileDropZone = ({ onFilesImported }) => {
                   });
                 }
               }
-              
+
               // Continue reading more entries (directory readers may return entries in chunks)
               const moreEntries = await readEntries();
               resolve([...results, ...moreEntries]);
@@ -259,7 +336,7 @@ const FileDropZone = ({ onFilesImported }) => {
         });
       });
     };
-    
+
     await readEntries();
     return audioFiles;
   };
@@ -270,9 +347,11 @@ const FileDropZone = ({ onFilesImported }) => {
     e.stopPropagation();
     setIsDragging(false);
 
-    // Clear previous errors
+    // Clear previous errors and preview
     setHasError(false);
     setErrorMessage('');
+    setPreviewFiles([]);
+    setShowPreview(false);
 
     try {
       const items = e.dataTransfer.items;
@@ -284,34 +363,38 @@ const FileDropZone = ({ onFilesImported }) => {
         return;
       }
 
-      // Check for directory drops using webkitGetAsEntry API (more widely supported)
+      // Check for directory drops using webkitGetAsEntry API
       for (let i = 0; i < items.length; i++) {
         const entry = items[i].webkitGetAsEntry?.();
-        
+
         if (entry && entry.isDirectory) {
           setIsProcessingFolder(true);
-          
+
           // Process directory using webkit API
           const folderName = entry.name;
           const audioFiles = await processWebkitDirectory(entry);
-          
+
           // Add folder to library
           if (audioFiles.length > 0) {
+            // Show preview of files
+            setPreviewFiles(audioFiles.slice(0, 5));
+            setShowPreview(true);
+            
             await addFolder({
               path: folderName,
               name: folderName,
               files: audioFiles
             });
-            
+
             // Process the audio files for the library
             const tracksToImport = [];
             let successCount = 0;
-            
+
             for (const audioFile of audioFiles) {
               try {
                 // Extract metadata
                 const metadata = await extractMetadata(audioFile.file);
-                
+
                 // Create track object
                 const track = {
                   id: metadata.id || `track-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -322,26 +405,28 @@ const FileDropZone = ({ onFilesImported }) => {
                   track: metadata.track || null,
                   genre: metadata.genre || null,
                   duration: metadata.duration || null,
+                  artwork: metadata.artwork || null,
                   path: audioFile.path,
                   fileName: audioFile.name,
                   fileSize: audioFile.size,
                   fileType: audioFile.type,
                   dateAdded: new Date().toISOString(),
                   playCount: 0,
-                  lastPlayed: null
+                  lastPlayed: null,
+                  file: audioFile.file // Keep reference to file for direct playback
                 };
-                
+
                 tracksToImport.push(track);
                 successCount++;
               } catch (error) {
                 console.error(`Error processing file ${audioFile.name}:`, error);
               }
             }
-            
+
             // Import tracks to library
             if (tracksToImport.length > 0) {
               const importResult = await importTracks(tracksToImport);
-              
+
               if (importResult) {
                 // Show success state
                 setImportStats({
@@ -349,15 +434,24 @@ const FileDropZone = ({ onFilesImported }) => {
                   success: successCount
                 });
                 setShowSuccess(true);
-                
+
                 // Hide success state after 3 seconds
                 setTimeout(() => {
                   setShowSuccess(false);
                 }, 3000);
-                
-                // Call onFilesImported callback
+
+                // Call onFilesImported callback with the imported tracks
                 if (onFilesImported) {
-                  onFilesImported(tracksToImport);
+                  // Prepare tracks for audio playback
+                  const playableTracks = tracksToImport.map(track => {
+                    // If we have a file, create a playable URL
+                    if (track.file && !track.url) {
+                      track.url = audioService.createBlobURL(track.file);
+                    }
+                    return track;
+                  });
+                  
+                  onFilesImported(playableTracks);
                 }
               }
             }
@@ -365,7 +459,7 @@ const FileDropZone = ({ onFilesImported }) => {
             setHasError(true);
             setErrorMessage('No audio files found in the selected folder');
           }
-          
+
           setIsProcessingFolder(false);
           return;
         }
@@ -406,6 +500,10 @@ const FileDropZone = ({ onFilesImported }) => {
   // Process files (filtering and importing)
   const processFiles = async (fileList) => {
     try {
+      // Clear preview
+      setPreviewFiles([]);
+      setShowPreview(false);
+      
       // Filter for audio files
       const audioFiles = filterAudioFilesFromFileList(fileList);
 
@@ -415,14 +513,23 @@ const FileDropZone = ({ onFilesImported }) => {
         return;
       }
 
+      // Show preview of files
+      setPreviewFiles(audioFiles.slice(0, 5));
+      setShowPreview(true);
+      
       // Extract metadata and prepare for import
       const tracksToImport = [];
       let successCount = 0;
 
       for (const audioFile of audioFiles) {
         try {
-          // Extract metadata
+          // Extract metadata using AudioService & MetadataService
           const metadata = await extractMetadata(audioFile.file);
+
+          // Create blob URL for direct playback if needed
+          const blobUrl = audioService.isInitialized
+            ? audioService.createBlobURL(audioFile.file)
+            : null;
 
           // Create track object
           const track = {
@@ -434,13 +541,15 @@ const FileDropZone = ({ onFilesImported }) => {
             track: metadata.track || null,
             genre: metadata.genre || null,
             duration: metadata.duration || null,
-            path: audioFile.path,
+            artwork: metadata.artwork || null,
+            path: blobUrl || null, // Use blob URL for playback
             fileName: audioFile.name,
             fileSize: audioFile.size,
             fileType: audioFile.type,
             dateAdded: new Date().toISOString(),
             playCount: 0,
-            lastPlayed: null
+            lastPlayed: null,
+            file: audioFile.file // Keep file reference for AudioService
           };
 
           tracksToImport.push(track);
@@ -465,6 +574,8 @@ const FileDropZone = ({ onFilesImported }) => {
           // Hide success state after 3 seconds
           setTimeout(() => {
             setShowSuccess(false);
+            // Hide file preview after success
+            setShowPreview(false);
           }, 3000);
 
           // Call onFilesImported callback
@@ -519,7 +630,7 @@ const FileDropZone = ({ onFilesImported }) => {
                 ? 'Error importing files'
                 : isProcessingFolder
                   ? 'Processing folder...'
-                  : 'Drag and drop audio files or folders here'}
+                  : 'Drag and drop audio files here'}
           </DropZoneText>
 
           <DropZoneSubtext>
@@ -532,6 +643,19 @@ const FileDropZone = ({ onFilesImported }) => {
                   : 'Or click to select files from your computer'}
           </DropZoneSubtext>
         </DropZoneContent>
+
+        {/* File preview */}
+        <FilesPreviewContainer $show={showPreview}>
+          {previewFiles.map((file, index) => (
+            <FilePreview key={index}>
+              <File size={14} />
+              <FileName>{file.name}</FileName>
+            </FilePreview>
+          ))}
+          {previewFiles.length < importStats.total && (
+            <FilePreview>+{importStats.total - previewFiles.length} more files</FilePreview>
+          )}
+        </FilesPreviewContainer>
 
         <SuccessOverlay $show={showSuccess} $isDarkTheme={isDarkTheme}>
           <SuccessIcon>

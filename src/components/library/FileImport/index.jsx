@@ -1,9 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
-import { FolderOpen, Plus, Trash2, ArrowRight, RefreshCw } from 'lucide-react';
-import { useLibrary } from '../../../features/library/providers/LibraryProvider';
-import { selectFolder, isFileSystemAccessSupported, legacyFolderSelect, filterAudioFilesFromFileList } from '../../../services/FileSystemService';
+import { FolderOpen, Plus, Trash2, ArrowRight, RefreshCw, AlertTriangle } from 'lucide-react';
+import { useLibrary } from '../../../hooks/useLibrary';
+import { 
+  selectFolder, 
+  isFileSystemAccessSupported, 
+  legacyFolderSelect, 
+  filterAudioFilesFromFileList 
+} from '../../../services/FileSystemService';
+import { extractMetadata } from '../../../services/MetadataService';
+import audioService from '../../../services/AudioService';
 import ImportProgress from './ImportProgress';
+import FileDropZone from './FileDropZone';
+import FolderBrowser from './FolderBrowser';
 
 const ImportContainer = styled.div`
   display: flex;
@@ -34,16 +43,16 @@ const AddButton = styled.button`
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: 4px;
   background-color: var(--accentPrimary);
-  color: ${(props) => (props.theme === 'dark' ? 'black' : 'white')};
+  color: ${props => props.theme === 'dark' ? 'black' : 'white'};
   border: none;
   font-size: 14px;
   cursor: pointer;
   transition: background-color 0.2s ease;
-  
+
   &:hover {
     background-color: var(--accentHighlight);
   }
-  
+
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -66,11 +75,11 @@ const ImportOption = styled.div`
   border: 1px solid var(--borderSubtle);
   color: var(--textPrimary);
   cursor: pointer;
-  
+
   &:hover {
     background-color: var(--bgHover);
   }
-  
+
   svg {
     color: var(--textSecondary);
   }
@@ -98,7 +107,7 @@ const FolderInfo = styled.div`
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  
+
   svg {
     color: var(--textSecondary);
   }
@@ -129,12 +138,12 @@ const ActionButton = styled.button`
   background-color: transparent;
   border: none;
   cursor: pointer;
-  
+
   &:hover {
     background-color: var(--bgHover);
     color: var(--textPrimary);
   }
-  
+
   &.danger:hover {
     color: var(--accentError);
   }
@@ -153,17 +162,17 @@ const ImportButton = styled.button`
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: 4px;
-  background-color: ${(props) => (props.$primary ? 'var(--accentPrimary)' : 'transparent')};
-  color: ${(props) => (props.$primary ? 'black' : 'var(--textPrimary)')};
-  border: ${(props) => (props.$primary ? 'none' : '1px solid var(--borderLight)')};
+  background-color: ${props => props.$primary ? 'var(--accentPrimary)' : 'transparent'};
+  color: ${props => props.$primary ? 'black' : 'var(--textPrimary)'};
+  border: ${props => props.$primary ? 'none' : '1px solid var(--borderLight)'};
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &:hover {
-    background-color: ${(props) => (props.$primary ? 'var(--accentHighlight)' : 'var(--bgHover)')};
+    background-color: ${props => props.$primary ? 'var(--accentHighlight)' : 'var(--bgHover)'};
   }
-  
+
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -179,7 +188,7 @@ const NoFoldersMessage = styled.div`
   padding: var(--spacing-lg);
   text-align: center;
   color: var(--textSecondary);
-  
+
   svg {
     color: var(--textDimmed);
     width: 48px;
@@ -200,65 +209,111 @@ const MessageText = styled.p`
   max-width: 400px;
 `;
 
+const StatusWarning = styled.div`
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background-color: rgba(255, 196, 0, 0.1);
+  border-left: 3px solid var(--accentWarning);
+  border-radius: 2px;
+  margin-bottom: var(--spacing-md);
+
+  svg {
+    color: var(--accentWarning);
+  }
+`;
+
+const WarningText = styled.div`
+  font-size: 14px;
+  color: var(--textPrimary);
+`;
+
+/**
+ * FileImport component - Handles importing audio files to the library
+ * Integrates with AudioService for playback of imported files
+ */
 const FileImport = () => {
   const { state, addFolder, removeFolder, scanLibrary } = useLibrary();
   const [isImporting, setIsImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState(0);
   const [showImportOptions, setShowImportOptions] = useState(false);
-  
+  const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+  const [audioEngineStatus, setAudioEngineStatus] = useState({
+    initialized: false,
+    message: ''
+  });
+
+  // Check AudioService initialization status
+  useEffect(() => {
+    const checkAudioService = () => {
+      if (!audioService.isInitialized) {
+        audioService.initialize();
+      }
+      
+      setAudioEngineStatus({
+        initialized: audioService.isInitialized,
+        message: audioService.isInitialized 
+          ? 'Audio engine ready for playback' 
+          : 'Audio engine initialization failed'
+      });
+    };
+    
+    checkAudioService();
+  }, []);
+
   // Handle folder selection
-  const handleSelectFolder = async () => {
+  const handleSelectFolder = useCallback(async () => {
     try {
       // Close import options dropdown
       setShowImportOptions(false);
-      
-      // Use File System Access API if supported
-      if (isFileSystemAccessSupported()) {
-        const folderHandle = await selectFolder();
-        
-        if (folderHandle) {
-          // Add folder to library
-          await addFolder({
-            path: folderHandle.name,
-            name: folderHandle.name,
-            handle: folderHandle
-          });
-        }
-      } else {
-        // Fallback to legacy folder selection
-        const files = await legacyFolderSelect();
-        
-        if (files && files.length > 0) {
-          // Get folder name from the first file's path
-          const firstFile = files[0];
-          const pathParts = firstFile.webkitRelativePath.split('/');
-          const folderName = pathParts[0];
-          
-          // Add folder to library
-          await addFolder({
-            path: folderName,
-            name: folderName,
-            legacy: true,
-            files: filterAudioFilesFromFileList(files)
-          });
-        }
+
+      // Show folder browser
+      setShowFolderBrowser(true);
+    } catch (error) {
+      console.error('Error selecting folder:', error);
+    }
+  }, []);
+
+  // Handle legacy folder selection (for browsers without File System Access API)
+  const handleLegacyFolderSelect = useCallback(async () => {
+    try {
+      // Close import options dropdown
+      setShowImportOptions(false);
+
+      // Use legacy folder selection
+      const files = await legacyFolderSelect();
+
+      if (files && files.length > 0) {
+        // Get folder name from the first file's path
+        const firstFile = files[0];
+        const pathParts = firstFile.webkitRelativePath.split('/');
+        const folderName = pathParts[0];
+
+        // Filter audio files
+        const audioFiles = filterAudioFilesFromFileList(files);
+
+        // Add folder to library
+        await addFolder({
+          path: folderName,
+          name: folderName,
+          legacy: true,
+          files: audioFiles
+        });
       }
     } catch (error) {
       console.error('Error selecting folder:', error);
-      // Handle error (could show an error notification)
     }
-  };
-  
+  }, [addFolder]);
+
   // Handle folder removal
-  const handleRemoveFolder = (folderPath) => {
+  const handleRemoveFolder = useCallback((folderPath) => {
     removeFolder(folderPath);
-  };
-  
+  }, [removeFolder]);
+
   // Start library scan
-  const handleStartScan = async () => {
+  const handleStartScan = useCallback(async () => {
     setIsImporting(true);
-    setImportProgress(0);
-    
+
     try {
       // Start scanning library
       await scanLibrary();
@@ -267,29 +322,70 @@ const FileImport = () => {
     } finally {
       setIsImporting(false);
     }
-  };
-  
-  // Update progress during scan
-  const updateProgress = (progress) => {
-    setImportProgress(progress);
-  };
-  
+  }, [scanLibrary]);
+
+  // Handle folder browser close
+  const handleFolderBrowserClose = useCallback(() => {
+    setShowFolderBrowser(false);
+  }, []);
+
+  // Handle folder selection from browser
+  const handleFolderSelected = useCallback((folder) => {
+    setShowFolderBrowser(false);
+  }, []);
+
+  // Process imported files for immediate playback
+  const handleFilesImported = useCallback((tracks) => {
+    if (tracks && tracks.length > 0 && audioService.isInitialized) {
+      // Play the first track
+      const firstTrack = tracks[0];
+      
+      // Create a blob URL for the file if needed
+      if (firstTrack.file && !firstTrack.path) {
+        const url = audioService.createBlobURL(firstTrack.file);
+        firstTrack.path = url;
+      }
+      
+      // Play the track using AudioService
+      audioService.play({
+        src: firstTrack.path,
+        title: firstTrack.title,
+        artist: firstTrack.artist
+      });
+    }
+  }, []);
+
+  // Refresh the library folders
+  const handleRefreshLibrary = useCallback(() => {
+    handleStartScan();
+  }, [handleStartScan]);
+
+  // If folder browser is shown, render it
+  if (showFolderBrowser) {
+    return (
+      <FolderBrowser
+        onFolderSelect={handleFolderSelected}
+        onCancel={handleFolderBrowserClose}
+      />
+    );
+  }
+
   return (
     <ImportContainer>
       <ImportHeader>
         <HeaderTitle>Import Music</HeaderTitle>
-        
+
         <div style={{ position: 'relative' }}>
           <AddButton onClick={() => setShowImportOptions(!showImportOptions)}>
             <Plus size={16} />
             <span>Add Source</span>
           </AddButton>
-          
+
           {showImportOptions && (
-            <ImportOptionsContainer style={{ 
-              position: 'absolute', 
-              top: '100%', 
-              right: 0, 
+            <ImportOptionsContainer style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
               zIndex: 10,
               width: '200px',
               marginTop: '4px',
@@ -307,14 +403,24 @@ const FileImport = () => {
           )}
         </div>
       </ImportHeader>
-      
+
+      {!audioEngineStatus.initialized && (
+        <StatusWarning>
+          <AlertTriangle size={16} />
+          <WarningText>
+            Audio engine is not fully initialized. Some playback features may be limited.
+          </WarningText>
+        </StatusWarning>
+      )}
+
       {isImporting ? (
-        <ImportProgress 
-          progress={importProgress} 
-          onCancel={() => setIsImporting(false)} 
+        <ImportProgress
+          onCancel={() => setIsImporting(false)}
         />
       ) : (
         <>
+          <FileDropZone onFilesImported={handleFilesImported} />
+
           {state.folders.length > 0 ? (
             <>
               <FoldersContainer>
@@ -325,7 +431,7 @@ const FileImport = () => {
                       <FolderPath>{folder.path}</FolderPath>
                     </FolderInfo>
                     <FolderActions>
-                      <ActionButton 
+                      <ActionButton
                         className="danger"
                         onClick={() => handleRemoveFolder(folder.path)}
                         aria-label="Remove folder"
@@ -336,9 +442,9 @@ const FileImport = () => {
                   </FolderItem>
                 ))}
               </FoldersContainer>
-              
+
               <ImportActions>
-                <ImportButton>
+                <ImportButton onClick={handleRefreshLibrary}>
                   <RefreshCw size={16} />
                   <span>Refresh</span>
                 </ImportButton>

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import Icon from '../../common/Icon';
 import { useNotification } from '../../common/Notification';
+import audioService from '../../../services/AudioService';
 
 // Styled components
 const Container = styled.div`
@@ -70,11 +71,11 @@ const SwitchInput = styled.input`
   opacity: 0;
   width: 0;
   height: 0;
-  
+
   &:checked + span {
     background-color: ${({ theme }) => theme.colors.brand.primary};
   }
-  
+
   &:checked + span:before {
     transform: translateX(16px);
   }
@@ -90,7 +91,7 @@ const SwitchSlider = styled.span`
   background-color: ${({ theme }) => theme.colors.border.secondary};
   transition: ${({ theme }) => theme.transitions.fast};
   border-radius: 10px;
-  
+
   &:before {
     position: absolute;
     content: "";
@@ -175,11 +176,11 @@ const SliderThumb = styled.div`
   background-color: ${({ theme }) => theme.colors.brand.primary};
   cursor: pointer;
   z-index: 1;
-  
+
   &:hover {
     transform: translateX(-50%) scale(1.1);
   }
-  
+
   &:active {
     transform: translateX(-50%) scale(0.95);
   }
@@ -209,7 +210,7 @@ const StyledSelect = styled.select`
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  
+
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme.colors.brand.primary};
@@ -225,69 +226,296 @@ const SelectIcon = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
 `;
 
-// Processing options component
-const ProcessingOptions = () => {
-  const { success } = useNotification();
+// Default options for fallback
+const defaultOptions = {
+  eq: {
+    enabled: true,
+    preset: 'flat',
+    gain: 0
+  },
+  compression: {
+    enabled: false,
+    threshold: -24,
+    ratio: 4
+  },
+  spatializer: {
+    enabled: true,
+    width: 50
+  },
+  limiter: {
+    enabled: true,
+    ceiling: -0.3
+  }
+};
+
+/**
+ * ProcessingOptions Component - Controls audio processing effects
+ * Integrates with the audio effects in the enhanced AudioService
+ */
+const ProcessingOptions = ({ engineComponents }) => {
+  const { success, error } = useNotification();
+  const [audioEffects, setAudioEffects] = useState(null);
   
   // State for processing options
-  const [options, setOptions] = useState({
-    eq: {
-      enabled: true,
-      preset: 'flat',
-      gain: 0
-    },
-    compression: {
-      enabled: false,
-      threshold: -24,
-      ratio: 4
-    },
-    spatializer: {
-      enabled: true,
-      width: 50
-    },
-    limiter: {
-      enabled: true,
-      ceiling: -0.3
-    }
-  });
-  
+  const [options, setOptions] = useState(defaultOptions);
+
+  // Initialize audio effects connection
+  useEffect(() => {
+    const initAudioEffects = async () => {
+      try {
+        // Get audio effects from engine components
+        let effects = null;
+        
+        if (engineComponents) {
+          if (engineComponents.core && engineComponents.core.getAudioEffects) {
+            effects = await engineComponents.core.getAudioEffects();
+          } else if (engineComponents.getAudioEffects) {
+            effects = await engineComponents.getAudioEffects();
+          }
+        } else if (audioService && audioService.getEngineComponents) {
+          const components = audioService.getEngineComponents();
+          if (components && components.core && components.core.getAudioEffects) {
+            effects = await components.core.getAudioEffects();
+          }
+        }
+        
+        if (!effects) {
+          console.warn('Audio effects not available, using default options');
+          return;
+        }
+        
+        setAudioEffects(effects);
+        
+        // Initialize state with actual effect settings
+        const currentSettings = {};
+        
+        // Get equalizer settings
+        if (effects.equalizer) {
+          try {
+            currentSettings.eq = {
+              enabled: effects.equalizer.isEnabled ? effects.equalizer.isEnabled() : defaultOptions.eq.enabled,
+              preset: effects.equalizer.getCurrentPreset ? 
+                effects.equalizer.getCurrentPreset() : defaultOptions.eq.preset,
+              gain: effects.equalizer.getMasterGain ? 
+                effects.equalizer.getMasterGain() : defaultOptions.eq.gain
+            };
+          } catch (err) {
+            console.warn('Error getting equalizer settings:', err);
+          }
+        }
+        
+        // Get compressor settings
+        if (effects.compressor) {
+          try {
+            currentSettings.compression = {
+              enabled: effects.compressor.isEnabled ? 
+                effects.compressor.isEnabled() : defaultOptions.compression.enabled,
+              threshold: effects.compressor.getThreshold ? 
+                effects.compressor.getThreshold() : defaultOptions.compression.threshold,
+              ratio: effects.compressor.getRatio ? 
+                effects.compressor.getRatio() : defaultOptions.compression.ratio
+            };
+          } catch (err) {
+            console.warn('Error getting compressor settings:', err);
+          }
+        }
+        
+        // Get spatializer settings
+        if (effects.spatializer) {
+          try {
+            currentSettings.spatializer = {
+              enabled: effects.spatializer.isEnabled ? 
+                effects.spatializer.isEnabled() : defaultOptions.spatializer.enabled,
+              width: effects.spatializer.getWidth ? 
+                effects.spatializer.getWidth() * 100 : defaultOptions.spatializer.width
+            };
+          } catch (err) {
+            console.warn('Error getting spatializer settings:', err);
+          }
+        }
+        
+        // Get limiter settings
+        if (effects.limiter) {
+          try {
+            currentSettings.limiter = {
+              enabled: effects.limiter.isEnabled ? 
+                effects.limiter.isEnabled() : defaultOptions.limiter.enabled,
+              ceiling: effects.limiter.getCeiling ? 
+                effects.limiter.getCeiling() : defaultOptions.limiter.ceiling
+            };
+          } catch (err) {
+            console.warn('Error getting limiter settings:', err);
+          }
+        }
+        
+        // Update state with engine settings
+        setOptions(prev => ({
+          ...prev,
+          ...currentSettings
+        }));
+      } catch (err) {
+        console.error('Error initializing audio effects:', err);
+      }
+    };
+    
+    initAudioEffects();
+  }, [engineComponents]);
+
   // Handle toggle change
-  const handleToggle = (option) => {
-    setOptions(prev => ({
-      ...prev,
-      [option]: {
-        ...prev[option],
-        enabled: !prev[option].enabled
+  const handleToggle = async (effectType) => {
+    try {
+      const newEnabled = !options[effectType].enabled;
+      
+      // Update local state
+      setOptions(prev => ({
+        ...prev,
+        [effectType]: {
+          ...prev[effectType],
+          enabled: newEnabled
+        }
+      }));
+      
+      // Update effect in audio engine
+      if (audioEffects) {
+        let effect = null;
+        
+        // Get the correct effect
+        switch (effectType) {
+          case 'eq':
+            effect = audioEffects.equalizer;
+            break;
+          case 'compression':
+            effect = audioEffects.compressor;
+            break;
+          case 'spatializer':
+            effect = audioEffects.spatializer;
+            break;
+          case 'limiter':
+            effect = audioEffects.limiter;
+            break;
+        }
+        
+        // Enable/disable the effect
+        if (effect && effect.setEnabled) {
+          await effect.setEnabled(newEnabled);
+        }
       }
-    }));
-    
-    success(`${option.charAt(0).toUpperCase() + option.slice(1)} ${!options[option].enabled ? 'enabled' : 'disabled'}`);
+      
+      success(`${effectType.charAt(0).toUpperCase() + effectType.slice(1)} ${newEnabled ? 'enabled' : 'disabled'}`);
+    } catch (err) {
+      console.error(`Error toggling ${effectType}:`, err);
+      error(`Failed to toggle ${effectType}: ${err.message}`);
+      
+      // Revert state on error
+      setOptions(prev => ({
+        ...prev,
+        [effectType]: {
+          ...prev[effectType],
+          enabled: !prev[effectType].enabled
+        }
+      }));
+    }
   };
-  
+
   // Handle numeric value change
-  const handleValueChange = (option, param, value) => {
-    setOptions(prev => ({
-      ...prev,
-      [option]: {
-        ...prev[option],
-        [param]: parseFloat(value)
+  const handleValueChange = async (effectType, param, value) => {
+    try {
+      const numValue = parseFloat(value);
+      
+      // Update local state
+      setOptions(prev => ({
+        ...prev,
+        [effectType]: {
+          ...prev[effectType],
+          [param]: numValue
+        }
+      }));
+      
+      // Update effect in audio engine
+      if (audioEffects) {
+        let effect = null;
+        
+        // Get the correct effect
+        switch (effectType) {
+          case 'eq':
+            effect = audioEffects.equalizer;
+            break;
+          case 'compression':
+            effect = audioEffects.compressor;
+            break;
+          case 'spatializer':
+            effect = audioEffects.spatializer;
+            break;
+          case 'limiter':
+            effect = audioEffects.limiter;
+            break;
+        }
+        
+        // Apply the parameter change
+        if (effect) {
+          switch (param) {
+            case 'gain':
+              if (effect.setMasterGain) {
+                await effect.setMasterGain(numValue);
+              }
+              break;
+            case 'threshold':
+              if (effect.setThreshold) {
+                await effect.setThreshold(numValue);
+              }
+              break;
+            case 'ratio':
+              if (effect.setRatio) {
+                await effect.setRatio(numValue);
+              }
+              break;
+            case 'width':
+              if (effect.setWidth) {
+                // Convert from percentage to 0-1 range
+                await effect.setWidth(numValue / 100);
+              }
+              break;
+            case 'ceiling':
+              if (effect.setCeiling) {
+                await effect.setCeiling(numValue);
+              }
+              break;
+          }
+        }
       }
-    }));
+    } catch (err) {
+      console.error(`Error setting ${param} for ${effectType}:`, err);
+      error(`Failed to update ${param}: ${err.message}`);
+    }
   };
-  
+
   // Handle select change
-  const handleSelectChange = (option, param, value) => {
-    setOptions(prev => ({
-      ...prev,
-      [option]: {
-        ...prev[option],
-        [param]: value
+  const handleSelectChange = async (effectType, param, value) => {
+    try {
+      // Update local state
+      setOptions(prev => ({
+        ...prev,
+        [effectType]: {
+          ...prev[effectType],
+          [param]: value
+        }
+      }));
+      
+      // Update effect in audio engine
+      if (audioEffects && effectType === 'eq' && param === 'preset') {
+        const equalizer = audioEffects.equalizer;
+        if (equalizer && equalizer.applyPreset) {
+          await equalizer.applyPreset(value);
+        }
       }
-    }));
-    
-    success(`${option.charAt(0).toUpperCase() + option.slice(1)} preset changed to ${value}`);
+      
+      success(`${effectType.charAt(0).toUpperCase() + effectType.slice(1)} preset changed to ${value}`);
+    } catch (err) {
+      console.error(`Error setting ${param} for ${effectType}:`, err);
+      error(`Failed to update ${param}: ${err.message}`);
+    }
   };
-  
+
   return (
     <Container>
       <Header>
@@ -296,7 +524,7 @@ const ProcessingOptions = () => {
           Audio Processing
         </Title>
       </Header>
-      
+
       <OptionsGrid>
         {/* Equalizer */}
         <OptionCard>
@@ -306,7 +534,7 @@ const ProcessingOptions = () => {
               Equalizer
             </OptionTitle>
             <OptionSwitch>
-              <SwitchInput 
+              <SwitchInput
                 type="checkbox"
                 checked={options.eq.enabled}
                 onChange={() => handleToggle('eq')}
@@ -343,14 +571,14 @@ const ProcessingOptions = () => {
               </ControlRow>
               <SliderContainer>
                 <SliderTrack />
-                <SliderFill 
-                  value={options.eq.gain + 12} 
-                  min={0} 
-                  max={24} 
+                <SliderFill
+                  value={options.eq.gain + 12}
+                  min={0}
+                  max={24}
                 />
-                <SliderThumb 
-                  value={options.eq.gain + 12} 
-                  min={0} 
+                <SliderThumb
+                  value={options.eq.gain + 12}
+                  min={0}
                   max={24}
                 />
                 <RangeInput
@@ -365,7 +593,7 @@ const ProcessingOptions = () => {
             </OptionControls>
           </OptionContent>
         </OptionCard>
-        
+
         {/* Compressor */}
         <OptionCard>
           <OptionHeader>
@@ -374,7 +602,7 @@ const ProcessingOptions = () => {
               Compressor
             </OptionTitle>
             <OptionSwitch>
-              <SwitchInput 
+              <SwitchInput
                 type="checkbox"
                 checked={options.compression.enabled}
                 onChange={() => handleToggle('compression')}
@@ -393,14 +621,14 @@ const ProcessingOptions = () => {
               </ControlRow>
               <SliderContainer>
                 <SliderTrack />
-                <SliderFill 
-                  value={options.compression.threshold + 60} 
-                  min={0} 
-                  max={60} 
+                <SliderFill
+                  value={options.compression.threshold + 60}
+                  min={0}
+                  max={60}
                 />
-                <SliderThumb 
-                  value={options.compression.threshold + 60} 
-                  min={0} 
+                <SliderThumb
+                  value={options.compression.threshold + 60}
+                  min={0}
                   max={60}
                 />
                 <RangeInput
@@ -412,21 +640,21 @@ const ProcessingOptions = () => {
                   onChange={(e) => handleValueChange('compression', 'threshold', e.target.value)}
                 />
               </SliderContainer>
-              
+
               <ControlRow>
                 <ControlLabel>Ratio</ControlLabel>
                 <ControlValue>{options.compression.ratio}:1</ControlValue>
               </ControlRow>
               <SliderContainer>
                 <SliderTrack />
-                <SliderFill 
-                  value={options.compression.ratio} 
-                  min={1} 
-                  max={20} 
+                <SliderFill
+                  value={options.compression.ratio}
+                  min={1}
+                  max={20}
                 />
-                <SliderThumb 
-                  value={options.compression.ratio} 
-                  min={1} 
+                <SliderThumb
+                  value={options.compression.ratio}
+                  min={1}
                   max={20}
                 />
                 <RangeInput
@@ -441,7 +669,7 @@ const ProcessingOptions = () => {
             </OptionControls>
           </OptionContent>
         </OptionCard>
-        
+
         {/* Spatializer */}
         <OptionCard>
           <OptionHeader>
@@ -450,7 +678,7 @@ const ProcessingOptions = () => {
               Spatializer
             </OptionTitle>
             <OptionSwitch>
-              <SwitchInput 
+              <SwitchInput
                 type="checkbox"
                 checked={options.spatializer.enabled}
                 onChange={() => handleToggle('spatializer')}
@@ -469,14 +697,14 @@ const ProcessingOptions = () => {
               </ControlRow>
               <SliderContainer>
                 <SliderTrack />
-                <SliderFill 
-                  value={options.spatializer.width} 
-                  min={0} 
-                  max={100} 
+                <SliderFill
+                  value={options.spatializer.width}
+                  min={0}
+                  max={100}
                 />
-                <SliderThumb 
-                  value={options.spatializer.width} 
-                  min={0} 
+                <SliderThumb
+                  value={options.spatializer.width}
+                  min={0}
                   max={100}
                 />
                 <RangeInput
@@ -491,7 +719,7 @@ const ProcessingOptions = () => {
             </OptionControls>
           </OptionContent>
         </OptionCard>
-        
+
         {/* Limiter */}
         <OptionCard>
           <OptionHeader>
@@ -500,7 +728,7 @@ const ProcessingOptions = () => {
               Limiter
             </OptionTitle>
             <OptionSwitch>
-              <SwitchInput 
+              <SwitchInput
                 type="checkbox"
                 checked={options.limiter.enabled}
                 onChange={() => handleToggle('limiter')}
@@ -519,14 +747,14 @@ const ProcessingOptions = () => {
               </ControlRow>
               <SliderContainer>
                 <SliderTrack />
-                <SliderFill 
-                  value={options.limiter.ceiling + 6} 
-                  min={0} 
-                  max={6} 
+                <SliderFill
+                  value={options.limiter.ceiling + 6}
+                  min={0}
+                  max={6}
                 />
-                <SliderThumb 
-                  value={options.limiter.ceiling + 6} 
-                  min={0} 
+                <SliderThumb
+                  value={options.limiter.ceiling + 6}
+                  min={0}
                   max={6}
                 />
                 <RangeInput

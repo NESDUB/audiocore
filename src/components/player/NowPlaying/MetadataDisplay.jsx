@@ -1,10 +1,11 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Clock, Disc, Calendar } from 'lucide-react';
+import { Clock, Disc, Calendar, File } from 'lucide-react';
 
 const MetadataContainer = styled.div`
   display: flex;
-  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
   margin-bottom: var(--spacing-md);
 `;
 
@@ -33,7 +34,7 @@ const MetadataValue = styled.span`
  */
 const formatTime = (seconds) => {
   if (!seconds && seconds !== 0) return '--:--';
-  
+
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -45,8 +46,9 @@ const formatTime = (seconds) => {
  * @param {string} props.album Album name
  * @param {string} props.year Release year
  * @param {number} props.duration Track duration in seconds
+ * @param {string} props.format Audio format information (e.g. "44.1kHz 16-bit")
  */
-const MetadataDisplay = ({ album, year, duration }) => {
+const MetadataDisplay = ({ album, year, duration, format }) => {
   return (
     <MetadataContainer>
       {album && (
@@ -57,7 +59,7 @@ const MetadataDisplay = ({ album, year, duration }) => {
           <MetadataValue>{album}</MetadataValue>
         </MetadataGroup>
       )}
-      
+
       {year && (
         <MetadataGroup>
           <MetadataIcon>
@@ -66,13 +68,22 @@ const MetadataDisplay = ({ album, year, duration }) => {
           <MetadataValue>{year}</MetadataValue>
         </MetadataGroup>
       )}
-      
+
       {duration !== undefined && (
         <MetadataGroup>
           <MetadataIcon>
             <Clock size={14} />
           </MetadataIcon>
           <MetadataValue>{formatTime(duration)}</MetadataValue>
+        </MetadataGroup>
+      )}
+      
+      {format && (
+        <MetadataGroup>
+          <MetadataIcon>
+            <File size={14} />
+          </MetadataIcon>
+          <MetadataValue>{format}</MetadataValue>
         </MetadataGroup>
       )}
     </MetadataContainer>

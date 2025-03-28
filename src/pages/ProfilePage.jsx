@@ -221,8 +221,8 @@ const ProfilePage = () => {
             </EditButton>
           </ProfileAvatar>
           
-          <ProfileName>Alex Johnson</ProfileName>
-          <ProfileUsername>@audiocore_user</ProfileUsername>
+          <ProfileName>Dwayne Cofer</ProfileName>
+          <ProfileUsername>@nesdub</ProfileUsername>
           
           <ProfileBio>
             Music enthusiast and avid collector. Always exploring new sounds and genres.

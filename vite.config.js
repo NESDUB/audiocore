@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -28,8 +27,17 @@ export default defineConfig({
       '@hooks': path.resolve(__dirname, './src/hooks'),
       '@utils': path.resolve(__dirname, './src/utils'),
       '@global': path.resolve(__dirname, './src/global'),
-      '@design-system': path.resolve(__dirname, './src/design-system')
+      '@design-system': path.resolve(__dirname, './src/design-system'),
+      // Add buffer polyfill
+      'buffer': 'buffer'
     }
+  },
+  define: {
+    // For Buffer in browser
+    'global': 'window'
+  },
+  optimizeDeps: {
+    include: ['buffer']
   },
   server: {
     port: 3000,

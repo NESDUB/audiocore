@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { 
-  FolderOpen, 
-  Music, 
-  Disc, 
-  Radio, 
-  Star, 
-  List, 
-  Grid, 
+import {
+  FolderOpen,
+  Music,
+  Disc,
+  Radio,
+  Star,
+  List,
+  Grid,
   BarChart2,
   Search,
   RefreshCw,
@@ -59,7 +59,7 @@ const Tab = styled.button`
   color: ${props => props.$active ? 'var(--textPrimary)' : 'var(--textSecondary)'};
   border-bottom: 2px solid ${props => props.$active ? 'var(--accentPrimary)' : 'transparent'};
   transition: all 0.2s ease;
-  
+
   &:hover {
     color: var(--textPrimary);
   }
@@ -74,7 +74,7 @@ const SearchBar = styled.div`
   background-color: var(--bgPrimary);
   border: 1px solid var(--borderLight);
   margin-bottom: var(--spacing-md);
-  
+
   input {
     flex: 1;
     height: 100%;
@@ -83,12 +83,12 @@ const SearchBar = styled.div`
     color: var(--textPrimary);
     outline: none;
     font-size: 14px;
-    
+
     &::placeholder {
       color: var(--textSecondary);
     }
   }
-  
+
   svg {
     color: var(--textSecondary);
     margin-right: var(--spacing-xs);
@@ -111,7 +111,7 @@ const ToolButton = styled.button`
   color: var(--textSecondary);
   border: 1px solid var(--borderLight);
   transition: all 0.2s ease;
-  
+
   &:hover {
     color: var(--textPrimary);
     background-color: var(--bgHover);
@@ -132,7 +132,7 @@ const ViewButton = styled.button`
   border-radius: 4px;
   color: ${props => props.$active ? 'var(--accentPrimary)' : 'var(--textSecondary)'};
   background-color: ${props => props.$active ? 'var(--bgHover)' : 'transparent'};
-  
+
   &:hover {
     background-color: var(--bgHover);
     color: ${props => props.$active ? 'var(--accentPrimary)' : 'var(--textPrimary)'};
@@ -180,7 +180,7 @@ const GridItem = styled.div`
   flex-direction: column;
   cursor: pointer;
   transition: transform 0.2s ease;
-  
+
   &:hover {
     transform: translateY(-4px);
   }
@@ -195,18 +195,18 @@ const ItemCover = styled.div`
   justify-content: center;
   overflow: hidden;
   margin-bottom: var(--spacing-xs);
-  
+
   svg {
     color: var(--textDimmed);
   }
-  
+
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform 0.2s ease;
   }
-  
+
   &:hover img {
     transform: scale(1.05);
   }
@@ -241,7 +241,7 @@ const ListItem = styled.div`
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.1s ease;
-  
+
   &:hover {
     background-color: var(--bgHover);
   }
@@ -256,11 +256,11 @@ const ListItemCover = styled.div`
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  
+
   svg {
     color: var(--textDimmed);
   }
-  
+
   img {
     width: 100%;
     height: 100%;
@@ -283,7 +283,7 @@ const NoContentMessage = styled.div`
   padding: var(--spacing-lg);
   text-align: center;
   height: 100%;
-  
+
   svg {
     color: var(--textDimmed);
     width: 48px;
@@ -315,12 +315,12 @@ const MenuItem = styled.button`
   background-color: ${props => props.$active ? 'var(--bgHover)' : 'transparent'};
   border-left: 2px solid ${props => props.$active ? 'var(--accentPrimary)' : 'transparent'};
   transition: all 0.2s ease;
-  
+
   &:hover {
     color: var(--textPrimary);
     background-color: var(--bgHover);
   }
-  
+
   svg {
     width: 18px;
     height: 18px;
@@ -342,34 +342,34 @@ const MenuHeader = styled.div`
 const LibraryPage = () => {
   // Get library context
   const { state, scanLibrary } = useLibrary();
-  
+
   // Component state
   const [activeTab, setActiveTab] = useState('music');
   const [viewMode, setViewMode] = useState('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [showImport, setShowImport] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('albums');
-  
+
   // Handle menu item click
   const handleMenuItemClick = (item) => {
     setActiveMenuItem(item);
   };
-  
+
   // Start library scan
   const handleScanLibrary = () => {
     scanLibrary();
   };
-  
+
   // Handle search input change
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
   };
-  
+
   // Toggle import panel
   const toggleImport = () => {
     setShowImport(!showImport);
   };
-  
+
   // Render content based on active menu item
   const renderContent = () => {
     // If no tracks in library, show import message
@@ -380,7 +380,7 @@ const LibraryPage = () => {
           <div>
             <MessageTitle>Your Library is Empty</MessageTitle>
             <MessageText>
-              Import your music files to start building your library. 
+              Import your music files to start building your library.
               You can add folders or drag and drop files.
             </MessageText>
           </div>
@@ -391,7 +391,7 @@ const LibraryPage = () => {
         </NoContentMessage>
       );
     }
-    
+
     // If import panel is active, show it
     if (showImport) {
       return (
@@ -414,18 +414,18 @@ const LibraryPage = () => {
         </ContentContainer>
       );
     }
-    
+
     // Filter tracks based on search query
     let filteredTracks = state.tracks;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filteredTracks = state.tracks.filter(track => 
+      filteredTracks = state.tracks.filter(track =>
         (track.title && track.title.toLowerCase().includes(query)) ||
         (track.artist && track.artist.toLowerCase().includes(query)) ||
         (track.album && track.album.toLowerCase().includes(query))
       );
     }
-    
+
     // Filter tracks based on active menu item
     switch (activeMenuItem) {
       case 'allMusic':
@@ -440,46 +440,54 @@ const LibraryPage = () => {
               albumMap[track.album] = {
                 title: track.album,
                 artist: track.artist,
-                tracks: []
+                tracks: [] // Store full track objects initially
               };
             }
-            albumMap[track.album].tracks.push(track);
+            albumMap[track.album].tracks.push(track); // Push the track object
           }
         });
-        
+
         // Render albums
         return (
           <ContentContainer>
             <ScrollContainer>
               {viewMode === 'grid' ? (
                 <GridView>
-                  {Object.values(albumMap).map((album, index) => (
-                    <GridItem key={index}>
-                      <ItemCover>
-                        <Disc size={40} />
-                      </ItemCover>
-                      <ItemInfo>
-                        <ItemTitle>{album.title}</ItemTitle>
-                        <ItemSubtitle>{album.artist}</ItemSubtitle>
-                        <ItemSubtitle>{album.tracks.length} tracks</ItemSubtitle>
-                      </ItemInfo>
-                    </GridItem>
-                  ))}
+                  {Object.values(albumMap).map((album, index) => {
+                    // Find the first track with artwork in this album
+                    const artworkUrl = album.tracks.find(t => t.artwork)?.artwork || null;
+                    return (
+                      <GridItem key={index}>
+                        <ItemCover>
+                          {artworkUrl ? <img src={artworkUrl} alt={album.title} /> : <Disc size={40} />}
+                        </ItemCover>
+                        <ItemInfo>
+                          <ItemTitle>{album.title}</ItemTitle>
+                          <ItemSubtitle>{album.artist}</ItemSubtitle>
+                          <ItemSubtitle>{album.tracks.length} tracks</ItemSubtitle>
+                        </ItemInfo>
+                      </GridItem>
+                    );
+                  })}
                 </GridView>
               ) : (
                 <ListView>
-                  {Object.values(albumMap).map((album, index) => (
-                    <ListItem key={index}>
-                      <ListItemCover>
-                        <Disc size={20} />
-                      </ListItemCover>
-                      <ItemInfo>
-                        <ItemTitle>{album.title}</ItemTitle>
-                        <ItemSubtitle>{album.tracks.length} tracks</ItemSubtitle>
-                      </ItemInfo>
-                      <ListItemArtist>{album.artist}</ListItemArtist>
-                    </ListItem>
-                  ))}
+                  {Object.values(albumMap).map((album, index) => {
+                     // Find the first track with artwork in this album
+                    const artworkUrl = album.tracks.find(t => t.artwork)?.artwork || null;
+                    return (
+                      <ListItem key={index}>
+                        <ListItemCover>
+                           {artworkUrl ? <img src={artworkUrl} alt={album.title} /> : <Disc size={20} />}
+                        </ListItemCover>
+                        <ItemInfo>
+                          <ItemTitle>{album.title}</ItemTitle>
+                          <ItemSubtitle>{album.tracks.length} tracks</ItemSubtitle>
+                        </ItemInfo>
+                        <ListItemArtist>{album.artist}</ListItemArtist>
+                      </ListItem>
+                    );
+                  })}
                 </ListView>
               )}
             </ScrollContainer>
@@ -489,7 +497,7 @@ const LibraryPage = () => {
             </StatsContainer>
           </ContentContainer>
         );
-        
+
       case 'artists':
         // Group tracks by artist
         const artistMap = {};
@@ -504,7 +512,7 @@ const LibraryPage = () => {
             artistMap[track.artist].tracks.push(track);
           }
         });
-        
+
         // Find unique albums for each artist
         Object.values(artistMap).forEach(artist => {
           const albums = new Set();
@@ -515,7 +523,7 @@ const LibraryPage = () => {
           });
           artist.albums = Array.from(albums);
         });
-        
+
         // Render artists
         return (
           <ContentContainer>
@@ -525,6 +533,7 @@ const LibraryPage = () => {
                   {Object.values(artistMap).map((artist, index) => (
                     <GridItem key={index}>
                       <ItemCover>
+                        {/* Placeholder: Consider finding representative art or using a generic icon */}
                         <User size={40} />
                       </ItemCover>
                       <ItemInfo>
@@ -540,6 +549,7 @@ const LibraryPage = () => {
                   {Object.values(artistMap).map((artist, index) => (
                     <ListItem key={index}>
                       <ListItemCover>
+                         {/* Placeholder: Consider finding representative art or using a generic icon */}
                         <User size={20} />
                       </ListItemCover>
                       <ItemInfo>
@@ -558,7 +568,7 @@ const LibraryPage = () => {
             </StatsContainer>
           </ContentContainer>
         );
-        
+
       case 'songs':
         // Render tracks
         return (
@@ -567,9 +577,9 @@ const LibraryPage = () => {
               {viewMode === 'grid' ? (
                 <GridView>
                   {filteredTracks.map((track, index) => (
-                    <GridItem key={index}>
+                    <GridItem key={track.id || index}>
                       <ItemCover>
-                        <Music size={40} />
+                        {track.artwork ? <img src={track.artwork} alt={track.title} /> : <Music size={40} />}
                       </ItemCover>
                       <ItemInfo>
                         <ItemTitle>{track.title}</ItemTitle>
@@ -582,9 +592,9 @@ const LibraryPage = () => {
               ) : (
                 <ListView>
                   {filteredTracks.map((track, index) => (
-                    <ListItem key={index}>
+                     <ListItem key={track.id || index}>
                       <ListItemCover>
-                        <Music size={20} />
+                         {track.artwork ? <img src={track.artwork} alt={track.title} /> : <Music size={20} />}
                       </ListItemCover>
                       <ItemInfo>
                         <ItemTitle>{track.title}</ItemTitle>
@@ -601,7 +611,7 @@ const LibraryPage = () => {
             </StatsContainer>
           </ContentContainer>
         );
-        
+
       case 'playlists':
         // Render playlists
         return (
@@ -619,12 +629,12 @@ const LibraryPage = () => {
             </ScrollContainer>
           </ContentContainer>
         );
-        
+
       default:
         return null;
     }
   };
-  
+
   return (
     <PageContainer>
       {/* Side panel with library navigation */}
@@ -632,54 +642,54 @@ const LibraryPage = () => {
         <ScrollContainer>
           <MenuSection>
             <MenuHeader>BROWSE</MenuHeader>
-            <MenuItem 
-              $active={activeMenuItem === 'allMusic'} 
+            <MenuItem
+              $active={activeMenuItem === 'allMusic'}
               onClick={() => handleMenuItemClick('allMusic')}
             >
               <Music size={18} />
               <span>All Music</span>
             </MenuItem>
-            <MenuItem 
-              $active={activeMenuItem === 'albums'} 
+            <MenuItem
+              $active={activeMenuItem === 'albums'}
               onClick={() => handleMenuItemClick('albums')}
             >
               <Disc size={18} />
               <span>Albums</span>
             </MenuItem>
-            <MenuItem 
-              $active={activeMenuItem === 'artists'} 
+            <MenuItem
+              $active={activeMenuItem === 'artists'}
               onClick={() => handleMenuItemClick('artists')}
             >
               <User size={18} />
               <span>Artists</span>
             </MenuItem>
-            <MenuItem 
-              $active={activeMenuItem === 'songs'} 
+            <MenuItem
+              $active={activeMenuItem === 'songs'}
               onClick={() => handleMenuItemClick('songs')}
             >
               <Music size={18} />
               <span>Songs</span>
             </MenuItem>
           </MenuSection>
-          
+
           <MenuSection>
             <MenuHeader>YOUR LIBRARY</MenuHeader>
-            <MenuItem 
-              $active={activeMenuItem === 'playlists'} 
+            <MenuItem
+              $active={activeMenuItem === 'playlists'}
               onClick={() => handleMenuItemClick('playlists')}
             >
               <List size={18} />
               <span>Playlists</span>
             </MenuItem>
-            <MenuItem 
-              $active={activeMenuItem === 'favorites'} 
+            <MenuItem
+              $active={activeMenuItem === 'favorites'}
               onClick={() => handleMenuItemClick('favorites')}
             >
               <Star size={18} />
               <span>Favorites</span>
             </MenuItem>
-            <MenuItem 
-              $active={activeMenuItem === 'radio'} 
+            <MenuItem
+              $active={activeMenuItem === 'radio'}
               onClick={() => handleMenuItemClick('radio')}
             >
               <Radio size={18} />
@@ -687,7 +697,7 @@ const LibraryPage = () => {
             </MenuItem>
           </MenuSection>
         </ScrollContainer>
-        
+
         <div style={{ padding: 'var(--spacing-md)', borderTop: '1px solid var(--borderSubtle)' }}>
           <ToolButton onClick={toggleImport} style={{ width: '100%' }}>
             <FolderOpen size={16} />
@@ -695,7 +705,7 @@ const LibraryPage = () => {
           </ToolButton>
         </div>
       </SidePanel>
-      
+
       {/* Main panel with library content */}
       <MainPanel>
         <div style={{ padding: 'var(--spacing-md)' }}>
@@ -706,18 +716,18 @@ const LibraryPage = () => {
               <span>Music</span>
             </Tab>
           </TabsList>
-          
+
           {/* Search and tools */}
           <SearchBar>
             <Search size={16} />
-            <input 
-              type="text" 
-              placeholder="Search Library..." 
+            <input
+              type="text"
+              placeholder="Search Library..."
               value={searchQuery}
               onChange={handleSearchChange}
             />
           </SearchBar>
-          
+
           {/* Toolbar with actions */}
           <ToolBar>
             <div style={{ display: 'flex', gap: 'var(--spacing-xs)' }}>
@@ -734,17 +744,17 @@ const LibraryPage = () => {
                 <span>Sort</span>
               </ToolButton>
             </div>
-            
+
             <ViewModeButtons>
-              <ViewButton 
-                $active={viewMode === 'grid'} 
+              <ViewButton
+                $active={viewMode === 'grid'}
                 onClick={() => setViewMode('grid')}
                 aria-label="Grid view"
               >
                 <Grid size={16} />
               </ViewButton>
-              <ViewButton 
-                $active={viewMode === 'list'} 
+              <ViewButton
+                $active={viewMode === 'list'}
                 onClick={() => setViewMode('list')}
                 aria-label="List view"
               >
@@ -753,7 +763,7 @@ const LibraryPage = () => {
             </ViewModeButtons>
           </ToolBar>
         </div>
-        
+
         {/* Render content based on selected view */}
         {renderContent()}
       </MainPanel>

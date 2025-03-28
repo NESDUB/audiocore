@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import Icon from '../../common/Icon';
 import { useNotification } from '../../common/Notification';
+import audioService from '../../../services/AudioService';
 
 // Styled components
 const Container = styled.div`
@@ -40,7 +41,7 @@ const ResetButton = styled.button`
   align-items: center;
   gap: 4px;
   transition: all ${({ theme }) => theme.transitions.fast};
-  
+
   &:hover {
     background-color: rgba(255, 255, 255, 0.03);
     color: ${({ theme }) => theme.colors.text.primary};
@@ -137,11 +138,11 @@ const SliderThumb = styled.div`
     warning ? theme.colors.brand.warning : theme.colors.brand.primary};
   cursor: pointer;
   z-index: 1;
-  
+
   &:hover {
     transform: translateX(-50%) scale(1.1);
   }
-  
+
   &:active {
     transform: translateX(-50%) scale(0.95);
   }
@@ -158,7 +159,7 @@ const RangeInput = styled.input`
 
 const SettingInfo = styled.div`
   font-size: ${({ theme }) => theme.typography.sizes.xs};
-  color: ${({ theme, warning }) => 
+  color: ${({ theme, warning }) =>
     warning ? theme.colors.brand.warning : theme.colors.text.tertiary};
   font-style: italic;
   margin-top: 4px;
@@ -179,7 +180,7 @@ const StyledSelect = styled.select`
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  
+
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme.colors.brand.primary};
@@ -200,7 +201,7 @@ const InfoPanel = styled.div`
   border-radius: 4px;
   padding: ${({ theme }) => theme.spacing.md};
   margin-top: ${({ theme }) => theme.spacing.md};
-  border-left: 3px solid ${({ theme, warning }) => 
+  border-left: 3px solid ${({ theme, warning }) =>
     warning ? theme.colors.brand.warning : theme.colors.brand.primary};
 `;
 
@@ -241,7 +242,7 @@ const MetricCard = styled.div`
 const MetricValue = styled.div`
   font-size: ${({ theme }) => theme.typography.sizes.xl};
   font-weight: ${({ theme }) => theme.typography.weights.medium};
-  color: ${({ theme, warning }) => 
+  color: ${({ theme, warning }) =>
     warning ? theme.colors.brand.warning : theme.colors.text.primary};
   margin-bottom: 2px;
 `;
@@ -251,112 +252,295 @@ const MetricLabel = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
 `;
 
-const BufferSettings = () => {
-  const { success } = useNotification();
-  
+// Default values for fallback
+const defaultSettings = {
+  bufferSize: 512,
+  sampleRate: 48000,
+  bitDepth: 24,
+  channels: 2,
+  latencyMode: 'balanced',
+};
+
+/**
+ * BufferSettings Component - Configures audio buffer settings
+ * Integrates with the AudioEngineCore from the enhanced AudioService
+ */
+const BufferSettings = ({ engineComponents }) => {
+  const { success, error } = useNotification();
+  const [engineCore, setEngineCore] = useState(null);
+
   // State for buffer settings
-  const [settings, setSettings] = useState({
-    bufferSize: 512,          // Buffer size in samples (powers of 2)
-    sampleRate: 48000,        // Sample rate in Hz
-    bitDepth: 24,             // Bit depth in bits
-    channels: 2,              // Number of audio channels
-    latencyMode: 'balanced',  // Latency mode (low, balanced, safe)
-  });
-  
+  const [settings, setSettings] = useState(defaultSettings);
+
   // Derived values
   const latencyMs = (settings.bufferSize / settings.sampleRate) * 1000;
   const qualityFactor = (settings.sampleRate * settings.bitDepth * settings.channels) / 1000000;
   const isHighLatency = latencyMs > 20;
-  
+
   // Buffer size options (powers of 2)
   const bufferSizes = [128, 256, 512, 1024, 2048, 4096];
-  
+
   // Sample rate options
   const sampleRates = [44100, 48000, 88200, 96000, 176400, 192000];
-  
+
   // Bit depth options
   const bitDepths = [16, 24, 32];
-  
-  // Handle buffer size change
-  const handleBufferSizeChange = (size) => {
-    setSettings(prev => ({
-      ...prev,
-      bufferSize: parseInt(size)
-    }));
-    
-    success(`Buffer size changed to ${size} samples`);
-  };
-  
-  // Handle sample rate change
-  const handleSampleRateChange = (rate) => {
-    setSettings(prev => ({
-      ...prev,
-      sampleRate: parseInt(rate)
-    }));
-    
-    success(`Sample rate changed to ${rate} Hz`);
-  };
-  
-  // Handle bit depth change
-  const handleBitDepthChange = (depth) => {
-    setSettings(prev => ({
-      ...prev,
-      bitDepth: parseInt(depth)
-    }));
-    
-    success(`Bit depth changed to ${depth} bits`);
-  };
-  
-  // Handle channels change
-  const handleChannelsChange = (channels) => {
-    setSettings(prev => ({
-      ...prev,
-      channels: parseInt(channels)
-    }));
-    
-    success(`Channels changed to ${channels}`);
-  };
-  
-  // Handle latency mode change
-  const handleLatencyModeChange = (mode) => {
-    const modeSettings = {
-      low: {
-        bufferSize: 128,
-        sampleRate: 48000
-      },
-      balanced: {
-        bufferSize: 512,
-        sampleRate: 48000
-      },
-      safe: {
-        bufferSize: 1024,
-        sampleRate: 48000
+
+  // Initialize engine connection
+  useEffect(() => {
+    const initEngineCore = async () => {
+      try {
+        // Get audio engine core
+        let core = null;
+        
+        if (engineComponents && engineComponents.core) {
+          core = engineComponents.core;
+        } else if (audioService && audioService.getEngineComponents) {
+          const components = audioService.getEngineComponents();
+          core = components?.core || null;
+        }
+        
+        if (!core) {
+          console.warn('AudioEngineCore not available, using default settings');
+          return;
+        }
+        
+        setEngineCore(core);
+        
+        // Load current settings from engine
+        try {
+          // Get buffer configuration
+          const engineSettings = {};
+          
+          if (core.getBufferSize) {
+            engineSettings.bufferSize = await core.getBufferSize();
+          }
+          
+          if (core.getSampleRate) {
+            engineSettings.sampleRate = await core.getSampleRate();
+          }
+          
+          if (core.getBitDepth) {
+            engineSettings.bitDepth = await core.getBitDepth();
+          }
+          
+          if (core.getChannelCount) {
+            engineSettings.channels = await core.getChannelCount();
+          }
+          
+          // Determine latency mode based on buffer size
+          if (engineSettings.bufferSize) {
+            if (engineSettings.bufferSize <= 128) {
+              engineSettings.latencyMode = 'low';
+            } else if (engineSettings.bufferSize >= 1024) {
+              engineSettings.latencyMode = 'safe';
+            } else {
+              engineSettings.latencyMode = 'balanced';
+            }
+          }
+          
+          // Update state with engine settings
+          setSettings(prev => ({
+            ...prev,
+            ...engineSettings
+          }));
+        } catch (err) {
+          console.error('Error loading engine settings:', err);
+          // Continue using default values
+        }
+      } catch (err) {
+        console.error('Error initializing engine core:', err);
       }
     };
     
-    setSettings(prev => ({
-      ...prev,
-      latencyMode: mode,
-      bufferSize: modeSettings[mode].bufferSize,
-      sampleRate: modeSettings[mode].sampleRate
-    }));
-    
-    success(`Latency mode changed to ${mode}`);
+    initEngineCore();
+  }, [engineComponents]);
+
+  // Handle buffer size change
+  const handleBufferSizeChange = async (size) => {
+    try {
+      // Update local state
+      setSettings(prev => ({
+        ...prev,
+        bufferSize: parseInt(size)
+      }));
+      
+      // Update engine if available
+      if (engineCore && engineCore.setBufferSize) {
+        await engineCore.setBufferSize(parseInt(size));
+      }
+      
+      success(`Buffer size changed to ${size} samples`);
+    } catch (err) {
+      console.error('Error setting buffer size:', err);
+      error(`Failed to set buffer size: ${err.message}`);
+    }
   };
-  
+
+  // Handle sample rate change
+  const handleSampleRateChange = async (rate) => {
+    try {
+      // Update local state
+      setSettings(prev => ({
+        ...prev,
+        sampleRate: parseInt(rate)
+      }));
+      
+      // Update engine if available
+      if (engineCore && engineCore.setSampleRate) {
+        await engineCore.setSampleRate(parseInt(rate));
+      }
+      
+      success(`Sample rate changed to ${rate} Hz`);
+    } catch (err) {
+      console.error('Error setting sample rate:', err);
+      error(`Failed to set sample rate: ${err.message}`);
+    }
+  };
+
+  // Handle bit depth change
+  const handleBitDepthChange = async (depth) => {
+    try {
+      // Update local state
+      setSettings(prev => ({
+        ...prev,
+        bitDepth: parseInt(depth)
+      }));
+      
+      // Update engine if available
+      if (engineCore && engineCore.setBitDepth) {
+        await engineCore.setBitDepth(parseInt(depth));
+      }
+      
+      success(`Bit depth changed to ${depth} bits`);
+    } catch (err) {
+      console.error('Error setting bit depth:', err);
+      error(`Failed to set bit depth: ${err.message}`);
+    }
+  };
+
+  // Handle channels change
+  const handleChannelsChange = async (channels) => {
+    try {
+      // Update local state
+      setSettings(prev => ({
+        ...prev,
+        channels: parseInt(channels)
+      }));
+      
+      // Update engine if available
+      if (engineCore && engineCore.setChannelCount) {
+        await engineCore.setChannelCount(parseInt(channels));
+      }
+      
+      success(`Channels changed to ${channels}`);
+    } catch (err) {
+      console.error('Error setting channels:', err);
+      error(`Failed to set channels: ${err.message}`);
+    }
+  };
+
+  // Handle latency mode change
+  const handleLatencyModeChange = async (mode) => {
+    try {
+      const modeSettings = {
+        low: {
+          bufferSize: 128,
+          sampleRate: 48000
+        },
+        balanced: {
+          bufferSize: 512,
+          sampleRate: 48000
+        },
+        safe: {
+          bufferSize: 1024,
+          sampleRate: 48000
+        }
+      };
+      
+      // Update local state
+      setSettings(prev => ({
+        ...prev,
+        latencyMode: mode,
+        bufferSize: modeSettings[mode].bufferSize,
+        sampleRate: modeSettings[mode].sampleRate
+      }));
+      
+      // Update engine if available
+      if (engineCore) {
+        // Apply buffer size
+        if (engineCore.setBufferSize) {
+          await engineCore.setBufferSize(modeSettings[mode].bufferSize);
+        }
+        
+        // Apply sample rate
+        if (engineCore.setSampleRate) {
+          await engineCore.setSampleRate(modeSettings[mode].sampleRate);
+        }
+        
+        // Apply latency hint if available
+        if (engineCore.setLatencyHint) {
+          await engineCore.setLatencyHint(mode);
+        }
+      }
+      
+      success(`Latency mode changed to ${mode}`);
+    } catch (err) {
+      console.error('Error setting latency mode:', err);
+      error(`Failed to set latency mode: ${err.message}`);
+    }
+  };
+
   // Reset to default settings
-  const handleReset = () => {
-    setSettings({
-      bufferSize: 512,
-      sampleRate: 48000,
-      bitDepth: 24,
-      channels: 2,
-      latencyMode: 'balanced'
-    });
-    
-    success('Audio buffer settings reset to defaults');
+  const handleReset = async () => {
+    try {
+      const defaultValues = {
+        bufferSize: 512,
+        sampleRate: 48000,
+        bitDepth: 24,
+        channels: 2,
+        latencyMode: 'balanced'
+      };
+      
+      // Update local state
+      setSettings(defaultValues);
+      
+      // Update engine if available
+      if (engineCore) {
+        // Reset all settings in engine
+        if (engineCore.resetBufferSettings) {
+          await engineCore.resetBufferSettings();
+        } else {
+          // Apply individual settings
+          if (engineCore.setBufferSize) {
+            await engineCore.setBufferSize(defaultValues.bufferSize);
+          }
+          
+          if (engineCore.setSampleRate) {
+            await engineCore.setSampleRate(defaultValues.sampleRate);
+          }
+          
+          if (engineCore.setBitDepth) {
+            await engineCore.setBitDepth(defaultValues.bitDepth);
+          }
+          
+          if (engineCore.setChannelCount) {
+            await engineCore.setChannelCount(defaultValues.channels);
+          }
+          
+          if (engineCore.setLatencyHint) {
+            await engineCore.setLatencyHint(defaultValues.latencyMode);
+          }
+        }
+      }
+      
+      success('Audio buffer settings reset to defaults');
+    } catch (err) {
+      console.error('Error resetting settings:', err);
+      error(`Failed to reset settings: ${err.message}`);
+    }
   };
-  
+
   return (
     <Container>
       <Header>
@@ -369,19 +553,19 @@ const BufferSettings = () => {
           Reset to Defaults
         </ResetButton>
       </Header>
-      
+
       <Description>
         Configure audio buffer settings to optimize performance and quality for your system.
         Lower buffer sizes reduce latency but may cause audio glitches on slower systems.
       </Description>
-      
+
       <SettingsGrid>
         <SettingSection>
           <SectionTitle>
             <Icon name="Recent" size="16px" />
             Buffer Configuration
           </SectionTitle>
-          
+
           {/* Buffer Size Setting */}
           <SettingItem>
             <SettingHeader>
@@ -390,13 +574,13 @@ const BufferSettings = () => {
             </SettingHeader>
             <SliderContainer>
               <SliderTrack />
-              <SliderFill 
+              <SliderFill
                 percentage={
                   (bufferSizes.indexOf(settings.bufferSize) / (bufferSizes.length - 1)) * 100
                 }
                 warning={settings.bufferSize < 256}
               />
-              <SliderThumb 
+              <SliderThumb
                 percentage={
                   (bufferSizes.indexOf(settings.bufferSize) / (bufferSizes.length - 1)) * 100
                 }
@@ -417,7 +601,7 @@ const BufferSettings = () => {
               </SettingInfo>
             )}
           </SettingItem>
-          
+
           {/* Latency Mode Setting */}
           <SettingItem>
             <SettingHeader>
@@ -438,13 +622,13 @@ const BufferSettings = () => {
             </SelectContainer>
           </SettingItem>
         </SettingSection>
-        
+
         <SettingSection>
           <SectionTitle>
             <Icon name="Recent" size="16px" />
             Audio Quality
           </SectionTitle>
-          
+
           {/* Sample Rate Setting */}
           <SettingItem>
             <SettingHeader>
@@ -467,7 +651,7 @@ const BufferSettings = () => {
               </SelectIcon>
             </SelectContainer>
           </SettingItem>
-          
+
           {/* Bit Depth Setting */}
           <SettingItem>
             <SettingHeader>
@@ -490,14 +674,14 @@ const BufferSettings = () => {
               </SelectIcon>
             </SelectContainer>
           </SettingItem>
-          
+
           {/* Channels Setting */}
           <SettingItem>
             <SettingHeader>
               <SettingLabel>Channels</SettingLabel>
               <SettingValue>
-                {settings.channels === 1 ? 'Mono' : 
-                 settings.channels === 2 ? 'Stereo' : 
+                {settings.channels === 1 ? 'Mono' :
+                 settings.channels === 2 ? 'Stereo' :
                  `${settings.channels} channels`}
               </SettingValue>
             </SettingHeader>
@@ -518,7 +702,7 @@ const BufferSettings = () => {
           </SettingItem>
         </SettingSection>
       </SettingsGrid>
-      
+
       <InfoPanel warning={isHighLatency}>
         <InfoTitle>
           <Icon name={isHighLatency ? "Recent" : "Albums"} size="16px" />
@@ -531,7 +715,7 @@ const BufferSettings = () => {
           }
         </InfoText>
       </InfoPanel>
-      
+
       <MetricsGrid>
         <MetricCard>
           <MetricValue warning={isHighLatency}>

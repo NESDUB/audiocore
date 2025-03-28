@@ -1,28 +1,26 @@
-import React from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import styled from 'styled-components';
 import { usePlayer } from '../../../features/player/providers/PlayerProvider';
+import { useLibrary } from '../../../hooks/useLibrary';
+import TrackItem from './TrackItem';
+import TrackListHeader from './TrackListHeader';
+import TrackContextMenu from './TrackContextMenu';
 import { SecondaryButton } from '../../common/Button';
+import { Music, Upload } from 'lucide-react';
+import audioService from '../../../services/AudioService';
 
 const TrackListContainer = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
 `;
 
-const ListHeader = styled.div`
-  display: grid;
-  grid-template-columns: 40px 1fr 120px 80px 80px;
-  padding: 0 ${({ theme }) => theme.spacing.md};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.tertiary};
-  margin-bottom: ${({ theme }) => theme.spacing.sm};
-`;
-
-const HeaderCell = styled.div`
-  font-size: ${({ theme }) => theme.typography.sizes.xs};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  padding: ${({ theme }) => theme.spacing.sm} 0;
+const TracksContainer = styled.div`
+  overflow-y: auto;
+  flex: 1;
 `;
 
 const NoTracksMessage = styled.div`
@@ -30,90 +28,59 @@ const NoTracksMessage = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: ${({ theme }) => theme.spacing.xl};
-  color: ${({ theme }) => theme.colors.text.secondary};
+  padding: var(--spacing-xl);
+  color: var(--textSecondary);
   text-align: center;
-  gap: ${({ theme }) => theme.spacing.md};
+  gap: var(--spacing-md);
+  height: 100%;
 `;
 
 const Message = styled.p`
-  margin-bottom: ${({ theme }) => theme.spacing.md};
+  margin-bottom: var(--spacing-md);
+  font-size: 15px;
 `;
 
-const TrackRow = styled.div`
-  display: grid;
-  grid-template-columns: 40px 1fr 120px 80px 80px;
-  align-items: center;
-  height: 50px;
-  padding: 0 ${({ theme }) => theme.spacing.md};
-  border-radius: 4px;
-  transition: background-color ${({ theme }) => theme.transitions.fast};
-  
-  &:hover {
-    background-color: rgba(255, 255, 255, 0.03);
-    cursor: pointer;
-  }
-  
-  ${({ isActive, theme }) => isActive && `
-    background-color: rgba(145, 242, 145, 0.05);
-    border-left: 2px solid ${theme.colors.brand.primary};
-  `}
+const MessageIcon = styled.div`
+  color: var(--textDimmed);
+  margin-bottom: var(--spacing-md);
 `;
 
-const TrackNumber = styled.div`
-  font-size: ${({ theme }) => theme.typography.sizes.sm};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  text-align: center;
-`;
-
-const TrackInfo = styled.div`
+const ButtonGroup = styled.div`
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  gap: var(--spacing-md);
 `;
 
-const TrackTitle = styled.div`
-  font-size: ${({ theme }) => theme.typography.sizes.md};
-  color: ${({ theme }) => theme.colors.text.primary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const TrackArtist = styled.div`
-  font-size: ${({ theme }) => theme.typography.sizes.sm};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const TrackAlbum = styled.div`
-  font-size: ${({ theme }) => theme.typography.sizes.sm};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const TrackDuration = styled.div`
-  font-size: ${({ theme }) => theme.typography.sizes.sm};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: ${({ theme }) => theme.typography.fonts.monospace};
-`;
-
-// Helper to format time in MM:SS
-const formatTime = (seconds) => {
-  if (!seconds) return '--:--';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-};
-
-const TrackList = () => {
-  const { tracks, currentTrack, play } = usePlayer();
+/**
+ * TrackList component - Displays a list of audio tracks with playback controls
+ * Interfaces with AudioService through the PlayerProvider
+ */
+const TrackList = ({ tracks: propTracks, showHeader = true }) => {
+  // Get tracks from props or library context
+  const { state: libraryState } = useLibrary();
+  const { 
+    currentTrack, 
+    play, 
+    pause, 
+    addToQueue, 
+    addToPlaylist,
+    isPlaying 
+  } = usePlayer();
   
-  const handleFileSelect = async () => {
+  // Local state for context menu
+  const [contextMenu, setContextMenu] = useState({
+    visible: false,
+    position: { x: 0, y: 0 },
+    track: null
+  });
+  
+  // Determine tracks to display - from props or library
+  const tracks = propTracks || libraryState.tracks;
+  
+  // Refs
+  const containerRef = useRef(null);
+  
+  // Handle file selection
+  const handleFileSelect = useCallback(async () => {
     try {
       // Open file picker
       const fileHandle = await window.showOpenFilePicker({
@@ -121,57 +88,114 @@ const TrackList = () => {
           {
             description: 'Audio Files',
             accept: {
-              'audio/*': ['.mp3', '.wav', '.flac', '.aac', '.ogg']
+              'audio/*': ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a']
             }
           }
         ],
         multiple: true
       });
       
-      // Handle file selection
-      console.log('Files selected:', fileHandle);
-      // In a real app, you would process these files and add them to your library
+      if (fileHandle && fileHandle.length > 0) {
+        // Process files
+        for (const handle of fileHandle) {
+          const file = await handle.getFile();
+          
+          if (file) {
+            // Create blob URL for the file
+            const url = audioService.createBlobURL(file);
+            
+            // Play the first file
+            if (fileHandle.indexOf(handle) === 0) {
+              await audioService.play(url);
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error selecting files:', error);
+      // Handle error (could show notification)
     }
-  };
+  }, []);
+  
+  // Show context menu for track
+  const handleShowContext = useCallback((track, position) => {
+    setContextMenu({
+      visible: true,
+      position,
+      track
+    });
+    
+    // Add document listener to close on click outside
+    document.addEventListener('click', handleHideContext);
+  }, []);
+  
+  // Hide context menu
+  const handleHideContext = useCallback(() => {
+    setContextMenu({
+      visible: false,
+      position: { x: 0, y: 0 },
+      track: null
+    });
+    
+    // Remove document listener
+    document.removeEventListener('click', handleHideContext);
+  }, []);
+  
+  // Handle keyboard shortcuts
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === ' ' && document.activeElement === containerRef.current) {
+      e.preventDefault();
+      
+      if (isPlaying) {
+        pause();
+      } else if (currentTrack) {
+        play();
+      }
+    }
+  }, [isPlaying, pause, play, currentTrack]);
   
   return (
-    <TrackListContainer>
+    <TrackListContainer 
+      ref={containerRef}
+      onKeyDown={handleKeyDown}
+      tabIndex="0"
+    >
+      {showHeader && <TrackListHeader />}
+      
       {tracks && tracks.length > 0 ? (
-        <>
-          <ListHeader>
-            <HeaderCell>#</HeaderCell>
-            <HeaderCell>Title</HeaderCell>
-            <HeaderCell>Album</HeaderCell>
-            <HeaderCell>Duration</HeaderCell>
-            <HeaderCell>Format</HeaderCell>
-          </ListHeader>
-          
+        <TracksContainer>
           {tracks.map((track, index) => (
-            <TrackRow 
-              key={track.id}
+            <TrackItem
+              key={track.id || index}
+              track={track}
+              index={index}
               isActive={currentTrack?.id === track.id}
-              onClick={() => play(track)}
-            >
-              <TrackNumber>{index + 1}</TrackNumber>
-              <TrackInfo>
-                <TrackTitle>{track.title}</TrackTitle>
-                <TrackArtist>{track.artist}</TrackArtist>
-              </TrackInfo>
-              <TrackAlbum>{track.album}</TrackAlbum>
-              <TrackDuration>{formatTime(track.duration)}</TrackDuration>
-              <div>{track.format}</div>
-            </TrackRow>
+              onShowContext={handleShowContext}
+            />
           ))}
-        </>
+        </TracksContainer>
       ) : (
         <NoTracksMessage>
+          <MessageIcon>
+            <Music size={48} />
+          </MessageIcon>
           <Message>No tracks in your library</Message>
-          <SecondaryButton onClick={handleFileSelect}>
-            Add Music Files
-          </SecondaryButton>
+          <ButtonGroup>
+            <SecondaryButton onClick={handleFileSelect}>
+              <Upload size={16} style={{ marginRight: '8px' }} />
+              Add Music Files
+            </SecondaryButton>
+          </ButtonGroup>
         </NoTracksMessage>
+      )}
+      
+      {contextMenu.visible && (
+        <TrackContextMenu
+          track={contextMenu.track}
+          isVisible={contextMenu.visible}
+          position={contextMenu.position}
+          onClose={handleHideContext}
+        />
       )}
     </TrackListContainer>
   );

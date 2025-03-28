@@ -5,6 +5,11 @@ import { useNotification } from '../../common/Notification';
 import Icon from '../../common/Icon';
 import { SecondaryButton } from '../../common/Button';
 
+// Import our new components
+import EqualizerBand from './EqualizerBand';
+import EqualizerPreset from './EqualizerPreset';
+import FrequencyResponse from './FrequencyResponse';
+
 // Main container
 const EqualizerContainer = styled.div`
   display: flex;
@@ -31,26 +36,6 @@ const HeaderTitle = styled.h2`
   margin: 0;
 `;
 
-const EqualizerControls = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing.sm};
-`;
-
-const PresetsSelect = styled.select`
-  background-color: ${({ theme }) => theme.colors.surface.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.secondary};
-  border-radius: 4px;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: ${({ theme }) => theme.typography.sizes.sm};
-  padding: 4px 8px;
-  outline: none;
-  
-  &:focus {
-    border-color: ${({ theme }) => theme.colors.brand.primary};
-  }
-`;
-
 // Main EQ sliders area
 const EqualizerContent = styled.div`
   display: flex;
@@ -74,7 +59,7 @@ const EqualizerBands = styled.div`
   padding: ${({ theme }) => theme.spacing.md} 0;
   position: relative;
   flex: 1;
-  
+
   &::before {
     content: '';
     position: absolute;
@@ -85,69 +70,6 @@ const EqualizerBands = styled.div`
     background-color: ${({ theme }) => theme.colors.border.tertiary};
     z-index: 0;
   }
-`;
-
-// Individual EQ band slider
-const BandSlider = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 36px;
-  z-index: 1;
-`;
-
-const SliderTrack = styled.div`
-  position: relative;
-  width: 4px;
-  height: 150px;
-  background-color: ${({ theme }) => theme.colors.border.tertiary};
-  border-radius: 2px;
-  overflow: visible;
-`;
-
-const SliderProgress = styled.div`
-  position: absolute;
-  bottom: ${({ value }) => value > 0 ? '50%' : `calc(50% - ${Math.abs(value)}%)`};
-  left: 0;
-  width: 100%;
-  height: ${({ value }) => `${Math.abs(value)}%`};
-  background-color: ${({ theme, value }) => 
-    value > 0 ? theme.colors.brand.primary : theme.colors.brand.secondary};
-  transition: all 0.1s ease;
-`;
-
-const SliderThumb = styled.div`
-  position: absolute;
-  left: 50%;
-  bottom: ${({ value }) => `calc(50% + ${value}%)`};
-  width: 12px;
-  height: 12px;
-  background-color: ${({ theme }) => theme.colors.text.primary};
-  border-radius: 50%;
-  transform: translate(-50%, 50%);
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  z-index: 2;
-  
-  &:hover {
-    transform: translate(-50%, 50%) scale(1.2);
-  }
-  
-  &:active {
-    transform: translate(-50%, 50%) scale(1.1);
-  }
-`;
-
-const BandLabel = styled.div`
-  font-size: ${({ theme }) => theme.typography.sizes.xs};
-  color: ${({ theme }) => theme.colors.text.secondary};
-`;
-
-const BandValue = styled.div`
-  font-size: ${({ theme }) => theme.typography.sizes.xs};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: ${({ theme }) => theme.typography.fonts.monospace};
 `;
 
 // Master controls
@@ -161,10 +83,10 @@ const MasterControls = styled.div`
 
 const ToggleButton = styled.button`
   background-color: transparent;
-  border: 1px solid ${({ theme, active }) => 
+  border: 1px solid ${({ theme, active }) =>
     active ? theme.colors.brand.primary : theme.colors.border.secondary};
   border-radius: 4px;
-  color: ${({ theme, active }) => 
+  color: ${({ theme, active }) =>
     active ? theme.colors.brand.primary : theme.colors.text.secondary};
   font-size: ${({ theme }) => theme.typography.sizes.xs};
   padding: 4px 8px;
@@ -173,12 +95,12 @@ const ToggleButton = styled.button`
   gap: 4px;
   cursor: pointer;
   transition: all ${({ theme }) => theme.transitions.fast};
-  
+
   &:hover {
     background-color: ${({ theme }) => theme.colors.surface.primary};
-    border-color: ${({ theme, active }) => 
+    border-color: ${({ theme, active }) =>
       active ? theme.colors.brand.primary : theme.colors.text.primary};
-    color: ${({ theme, active }) => 
+    color: ${({ theme, active }) =>
       active ? theme.colors.brand.primary : theme.colors.text.primary};
   }
 `;
@@ -191,63 +113,8 @@ const MasterValue = styled.div`
   color: ${({ theme }) => theme.colors.text.primary};
 `;
 
-// Visualization of frequency response curve
-const ResponseCurve = styled.div`
-  position: relative;
-  width: 100%;
-  height: 80px;
-  background-color: ${({ theme }) => theme.colors.surface.primary};
-  border-radius: 4px;
-  overflow: hidden;
-  margin-top: ${({ theme }) => theme.spacing.sm};
-`;
-
-const CurveSvg = styled.svg`
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
-`;
-
-const CurvePath = styled.path`
-  fill: none;
-  stroke: ${({ theme }) => theme.colors.brand.primary};
-  stroke-width: 2;
-  opacity: 0.8;
-`;
-
-const CurveGrid = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  
-  &::before, &::after {
-    content: '';
-    position: absolute;
-    background-color: ${({ theme }) => theme.colors.border.tertiary};
-  }
-  
-  &::before {
-    left: 0;
-    right: 0;
-    top: 50%;
-    height: 1px;
-  }
-  
-  &::after {
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    width: 1px;
-  }
-`;
-
 // Predefined equalizer presets
-const PRESETS = {
+const DEFAULT_PRESETS = {
   flat: { name: 'Flat', values: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
   bass: { name: 'Bass Boost', values: [6, 5, 4, 2, 1, 0, 0, 0, 0, 0] },
   treble: { name: 'Treble Boost', values: [0, 0, 0, 0, 0, 1, 2, 3, 4, 5] },
@@ -260,94 +127,202 @@ const PRESETS = {
 // The frequency bands in Hz
 const FREQUENCY_BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 
+/**
+ * EqualizerPanel component - Audio equalizer with frequency bands and presets
+ */
 const EqualizerPanel = () => {
   // State
   const [enabled, setEnabled] = useState(false);
   const [preset, setPreset] = useState('flat');
-  const [bands, setBands] = useState(PRESETS.flat.values);
+  const [bands, setBands] = useState(DEFAULT_PRESETS.flat.values);
   const [masterGain, setMasterGain] = useState(0);
   const [draggingBand, setDraggingBand] = useState(null);
-  
-  // Refs for drag handling
-  const slidersRef = useRef([]);
-  
+  const [presets, setPresets] = useState(DEFAULT_PRESETS);
+
+  // Refs
+  const equalizerRef = useRef(null);
+
   // Get player context and notification system
-  const { /* audioContext, masterEqualizer */ } = usePlayer();
+  const { getAudioEffects, audioEngine } = usePlayer();
   const { success } = useNotification();
   
+  // Connect to the audio engine equalizer when the component mounts
+  useEffect(() => {
+    // Get the equalizer from the audio engine effects
+    if (audioEngine && getAudioEffects) {
+      const effects = getAudioEffects();
+      if (effects && effects.equalizer) {
+        equalizerRef.current = effects.equalizer;
+        
+        // Initialize equalizer state from the engine if available
+        if (equalizerRef.current.getBandValues) {
+          const engineBands = equalizerRef.current.getBandValues();
+          if (engineBands && engineBands.length === bands.length) {
+            setBands(engineBands);
+            
+            // Determine preset if it matches any predefined preset
+            detectAndSetPreset(engineBands);
+          }
+        }
+        
+        // Get enabled state from engine
+        if (equalizerRef.current.isEnabled) {
+          setEnabled(equalizerRef.current.isEnabled());
+        }
+        
+        // Get master gain from engine
+        if (equalizerRef.current.getMasterGain) {
+          const gain = equalizerRef.current.getMasterGain();
+          setMasterGain(Math.round(gain * 10)); // Convert from -1/+1 to -10/+10 range
+        }
+        
+        // Load saved custom presets if available
+        if (window.localStorage) {
+          const savedPresets = window.localStorage.getItem('eqCustomPresets');
+          if (savedPresets) {
+            try {
+              const customPresets = JSON.parse(savedPresets);
+              setPresets({
+                ...DEFAULT_PRESETS,
+                ...customPresets
+              });
+            } catch (e) {
+              console.error('Failed to load custom presets', e);
+            }
+          }
+        }
+      }
+    }
+  }, [audioEngine, getAudioEffects]);
+
   // Apply preset when changed
   useEffect(() => {
     if (preset !== 'custom') {
-      setBands(PRESETS[preset].values);
-      success(`Applied "${PRESETS[preset].name}" equalizer preset`, {
+      const presetValues = presets[preset]?.values || DEFAULT_PRESETS.flat.values;
+      setBands(presetValues);
+      success(`Applied "${presets[preset]?.name || 'Flat'}" equalizer preset`, {
         autoClose: true,
         duration: 1500
       });
+      
+      // Apply to audio engine if enabled
+      if (enabled && equalizerRef.current) {
+        updateEqualizerBands(presetValues);
+      }
     }
-  }, [preset]);
-  
+  }, [preset, success, enabled, presets]);
+
   // Update audio when bands change
   useEffect(() => {
     if (!enabled) return;
-    
-    // In a real app, you would apply the EQ values to Web Audio API filters
-    // For example:
-    // bands.forEach((gain, i) => {
-    //   if (masterEqualizer && masterEqualizer.bands[i]) {
-    //     masterEqualizer.bands[i].gain.value = gain;
-    //   }
-    // });
-    
+
+    // Apply to audio engine
+    if (equalizerRef.current) {
+      updateEqualizerBands(bands);
+    }
+
     // If bands don't match any preset, set to custom
-    const presetMatch = Object.entries(PRESETS).find(([key, data]) => 
+    const presetMatch = Object.entries(presets).find(([key, data]) =>
       key !== 'custom' && data.values.every((val, i) => val === bands[i])
     );
-    
+
     if (!presetMatch && preset !== 'custom') {
       setPreset('custom');
     }
-  }, [bands, enabled]);
-  
+  }, [bands, enabled, preset, presets]);
+
   // Apply master gain
   useEffect(() => {
-    if (!enabled) return;
-    
-    // In a real app, you would apply master gain to the Web Audio API
-    // For example:
-    // if (masterEqualizer && masterEqualizer.masterGain) {
-    //   masterEqualizer.masterGain.gain.value = masterGain;
-    // }
+    if (!enabled || !equalizerRef.current) return;
+
+    // Apply master gain to the audio engine
+    if (equalizerRef.current.setMasterGain) {
+      equalizerRef.current.setMasterGain(masterGain / 10); // Convert from -10/+10 to -1/+1 range
+    }
   }, [masterGain, enabled]);
+
+  // Function to update the equalizer bands in the audio engine
+  const updateEqualizerBands = (bandValues) => {
+    if (!equalizerRef.current) return;
+    
+    if (equalizerRef.current.setBandValues) {
+      // Use bulk update if available
+      equalizerRef.current.setBandValues(bandValues);
+    } else {
+      // Otherwise update bands individually
+      bandValues.forEach((gain, i) => {
+        if (equalizerRef.current.setBandGain) {
+          equalizerRef.current.setBandGain(i, gain);
+        } else if (equalizerRef.current.bands && equalizerRef.current.bands[i]) {
+          // Direct access to filter nodes
+          const filter = equalizerRef.current.bands[i];
+          if (filter.gain && typeof filter.gain.value !== 'undefined') {
+            filter.gain.value = gain;
+          }
+        }
+      });
+    }
+  };
   
+  // Detect current preset based on band values
+  const detectAndSetPreset = (bandValues) => {
+    const matchingPreset = Object.entries(presets).find(([key, data]) => 
+      key !== 'custom' && data.values.every((val, i) => val === bandValues[i])
+    );
+    
+    if (matchingPreset) {
+      setPreset(matchingPreset[0]);
+    } else {
+      setPreset('custom');
+    }
+  };
+
   // Toggle equalizer on/off
   const toggleEqualizer = () => {
-    setEnabled(!enabled);
-    success(!enabled ? 'Equalizer enabled' : 'Equalizer disabled', {
+    const newEnabled = !enabled;
+    setEnabled(newEnabled);
+    
+    success(newEnabled ? 'Equalizer enabled' : 'Equalizer disabled', {
       autoClose: true,
       duration: 1500
     });
-    
-    // In a real app, you would connect/bypass the EQ in the audio chain
+
+    // Toggle the equalizer in the audio engine
+    if (equalizerRef.current && equalizerRef.current.setEnabled) {
+      equalizerRef.current.setEnabled(newEnabled);
+    }
   };
-  
+
   // Reset all bands to zero
   const resetEqualizer = () => {
-    setBands(PRESETS.flat.values);
+    const flatBands = DEFAULT_PRESETS.flat.values;
+    setBands(flatBands);
     setMasterGain(0);
     setPreset('flat');
+    
+    // Apply to audio engine
+    if (enabled && equalizerRef.current) {
+      updateEqualizerBands(flatBands);
+      
+      // Reset master gain
+      if (equalizerRef.current.setMasterGain) {
+        equalizerRef.current.setMasterGain(0);
+      }
+    }
+    
     success('Equalizer reset', {
       autoClose: true,
       duration: 1500
     });
   };
-  
+
   // Handle band value change
   const handleBandChange = (index, value) => {
     const newBands = [...bands];
     newBands[index] = value;
     setBands(newBands);
   };
-  
+
   // Handle mouse down on a band slider
   const handleBandMouseDown = (e, index) => {
     setDraggingBand(index);
@@ -355,24 +330,28 @@ const EqualizerPanel = () => {
     document.addEventListener('mouseup', handleMouseUp);
     e.preventDefault(); // Prevent text selection
   };
-  
+
   // Handle mouse move while dragging
   const handleMouseMove = (e) => {
     if (draggingBand === null) return;
     
-    const sliderRef = slidersRef.current[draggingBand];
-    if (!sliderRef) return;
+    const handleSliderDrag = (clientY) => {
+      const sliders = document.querySelectorAll('.eq-band-slider');
+      if (!sliders || !sliders[draggingBand]) return;
+      
+      const sliderRect = sliders[draggingBand].getBoundingClientRect();
+      const height = sliderRect.height;
+      const offsetY = sliderRect.bottom - clientY;
+      const percentage = (offsetY / height) * 100 - 50; // -50 to 50 range
+      const value = Math.round(percentage / 5) * 5; // Round to nearest 5
+      const clampedValue = Math.max(Math.min(value, 50), -50); // Clamp to -50 to 50
+      
+      handleBandChange(draggingBand, clampedValue / 5); // Scale to -10 to 10
+    };
     
-    const rect = sliderRef.getBoundingClientRect();
-    const height = rect.height;
-    const offsetY = rect.bottom - e.clientY;
-    const percentage = (offsetY / height) * 100 - 50; // -50 to 50 range
-    const value = Math.round(percentage / 5) * 5; // Round to nearest 5
-    const clampedValue = Math.max(Math.min(value, 50), -50); // Clamp to -50 to 50
-    
-    handleBandChange(draggingBand, clampedValue / 5); // Scale to -10 to 10
+    handleSliderDrag(e.clientY);
   };
-  
+
   // Handle mouse up to end dragging
   const handleMouseUp = () => {
     setDraggingBand(null);
@@ -380,78 +359,92 @@ const EqualizerPanel = () => {
     document.removeEventListener('mouseup', handleMouseUp);
   };
   
-  // Generate SVG path for response curve
-  const generateCurvePath = () => {
-    const width = 100;
-    const height = 80;
-    const points = bands.map((band, i) => {
-      const x = (i / (bands.length - 1)) * width;
-      const y = height / 2 - (band / 10) * (height / 4); // Scale -10 to 10 range to fit height
-      return `${x},${y}`;
-    });
+  // Save a custom preset
+  const handleSaveCustom = (newPreset) => {
+    // Add unique ID if not provided
+    const presetId = newPreset.id || `custom_${Date.now()}`;
     
-    // Add control points for a smooth curve
-    return `M0,${height / 2} C${points.join(' ')} ${width},${height / 2}`;
+    // Create updated presets object
+    const updatedPresets = {
+      ...presets,
+      [presetId]: {
+        name: newPreset.name,
+        values: newPreset.values
+      }
+    };
+    
+    // Update state
+    setPresets(updatedPresets);
+    setPreset(presetId);
+    
+    // Save to localStorage if available
+    if (window.localStorage) {
+      try {
+        // Extract only custom presets (not the default ones)
+        const customPresets = {};
+        Object.entries(updatedPresets).forEach(([key, preset]) => {
+          if (!DEFAULT_PRESETS[key]) {
+            customPresets[key] = preset;
+          }
+        });
+        
+        window.localStorage.setItem('eqCustomPresets', JSON.stringify(customPresets));
+      } catch (e) {
+        console.error('Failed to save custom presets', e);
+      }
+    }
+    
+    success(`Saved "${newPreset.name}" preset`, {
+      autoClose: true,
+      duration: 1500
+    });
   };
-  
+
   return (
     <EqualizerContainer>
       <EqualizerHeader>
         <HeaderTitle>EQUALIZER</HeaderTitle>
-        <EqualizerControls>
-          <PresetsSelect 
-            value={preset}
-            onChange={(e) => setPreset(e.target.value)}
-            disabled={!enabled}
-          >
-            {Object.entries(PRESETS).map(([key, { name }]) => (
-              <option key={key} value={key}>{name}</option>
-            ))}
-          </PresetsSelect>
-          <SecondaryButton onClick={resetEqualizer} disabled={!enabled}>
-            Reset
-          </SecondaryButton>
-        </EqualizerControls>
+        <EqualizerPreset
+          currentPreset={preset}
+          presets={presets}
+          onPresetChange={setPreset}
+          onReset={resetEqualizer}
+          onSaveCustom={handleSaveCustom}
+          currentValues={bands}
+          disabled={!enabled}
+        />
       </EqualizerHeader>
-      
+
       <EqualizerContent>
-        <ResponseCurve>
-          <CurveSvg viewBox="0 0 100 80" preserveAspectRatio="none">
-            <CurvePath d={generateCurvePath()} />
-          </CurveSvg>
-          <CurveGrid />
-        </ResponseCurve>
-        
+        <FrequencyResponse
+          bands={bands}
+          frequencies={FREQUENCY_BANDS}
+        />
+
         <EqualizerBands>
           {bands.map((band, index) => (
-            <BandSlider key={index}>
-              <BandValue>{band > 0 ? `+${band}` : band}</BandValue>
-              <SliderTrack 
-                ref={(el) => slidersRef.current[index] = el}
-                onMouseDown={(e) => enabled && handleBandMouseDown(e, index)}
-              >
-                <SliderProgress value={band * 5} /> {/* Scale -10 to 10 to -50 to 50 for display */}
-                <SliderThumb value={band * 5} />
-              </SliderTrack>
-              <BandLabel>
-                {FREQUENCY_BANDS[index] >= 1000 
-                  ? `${FREQUENCY_BANDS[index]/1000}k` 
-                  : FREQUENCY_BANDS[index]}
-              </BandLabel>
-            </BandSlider>
+            <EqualizerBand
+              key={index}
+              frequency={FREQUENCY_BANDS[index]}
+              value={band}
+              onChange={(value) => handleBandChange(index, value)}
+              onMouseDown={(e) => handleBandMouseDown(e, index)}
+              disabled={!enabled}
+              className="eq-band-slider"
+            />
           ))}
         </EqualizerBands>
       </EqualizerContent>
-      
+
       <MasterControls>
-        <ToggleButton 
+        <ToggleButton
           active={enabled}
           onClick={toggleEqualizer}
         >
           <Icon name="Equalizer" size="14px" />
           {enabled ? 'ENABLED' : 'DISABLED'}
         </ToggleButton>
-        
+
         <MasterValue>
           <span>MASTER:</span>
           <SliderRow>
